@@ -1,0 +1,12 @@
+{
+  "templates_folder": "Templates",
+  "trigger_on_file_creation": false,
+  "auto_jump_to_cursor": true,
+  "enable_folder_templates": true,
+  "folder_templates": [
+    { "folder": "Daily", "template": "Templates/Daily Note.md" },
+    { "folder": "People", "template": "Templates/Person.md" },
+    { "folder": "Projects", "template": "Templates/Project.md" },
+    { "folder": "Sources", "template": "Templates/Source.md" }
+  ]
+}

@@ -1,0 +1,18 @@
+# Obsidian local UI state (machine-specific, causes merge churn)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/*/data.json
+!.obsidian/plugins/templater-obsidian/data.json
+!.obsidian/plugins/calendar/data.json
+
+# Raw-drop inbox: your unprocessed notes, PDFs, exports. Local only.
+Inbox/*
+!Inbox/README.md
+!Inbox/.gitkeep
+
+# Pasted images can get large — untrack them if your vault grows past what git likes.
+# raw_images/*.png
+
+# OS cruft
+.DS_Store
+Thumbs.db
