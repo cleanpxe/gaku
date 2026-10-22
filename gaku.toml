@@ -1,0 +1,28 @@
+# gaku settings. Every key is optional; scripts/gakulib.py holds the defaults.
+
+[git]
+# What Claude does after it commits: "auto" pushes every commit, "ask" asks first,
+# "never" leaves pushing to you. If you pick "auto", also allow `Bash(git push *)`
+# in .claude/settings.json so the push doesn't stop for a permission prompt.
+push = "ask"
+
+[vault]
+# Folders that aren't linted. A link resolves into them only when nothing else matches.
+skip_dirs = ["Inbox"]
+skip_paths = ["docs/examples/"]
+
+[lint]
+# Scan for emails, LMS URLs and home paths. Keep this on in a vault you share.
+personal_scan = true
+# Substrings of lint output lines to suppress (known false positives).
+allow = []
+
+[heal]
+# Folders whose notes get a managed heal block.
+scope = ["Courses", "Projects", "People", "Synthesis", "Sources"]
+
+[intake]
+# Where downloaded course files land, and the DPI for slide renders.
+from = "~/Downloads"
+extensions = ["pdf"]
+dpi = 110

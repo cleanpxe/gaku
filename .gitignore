@@ -16,3 +16,6 @@ Inbox/*
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# Python bytecode from scripts/
+__pycache__/

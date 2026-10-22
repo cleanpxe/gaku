@@ -1,90 +1,124 @@
 #!/usr/bin/env python3
-"""Vault lint: broken wikilinks, stray personal data, placeholder syntax.
+"""Vault lint: links, embeds, heal blocks, frontmatter, stray personal data.
 
-Usage: python3 scripts/check_vault.py [--strict]
-  --strict   also fail on unfilled ⬜ placeholders outside System/ and Templates/
-Exit 1 on any finding.
+Usage: python3 scripts/check_vault.py [--strict] [--json] [--vault DIR]
+  --strict   warnings fail too, and unfilled ⬜ placeholders outside System/ and
+             Templates/ count as warnings
+  --json     machine-readable findings
+Exit 1 on any error (or any warning under --strict). Read-only.
+
+Errors:   dead-link · missing-embed · ambiguous-link · heal-block · template-syntax · personal-data
+Warnings: duplicate-name · missing-frontmatter · orphan · placeholder
+
+Suppress a known false positive by adding a substring of its output line to
+`[lint] allow` in gaku.toml.
 """
-import os, re, sys
+import json, re, sys
+from pathlib import Path
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKIP_DIRS = {".git", ".obsidian", "node_modules", "Inbox", "_trash"}
-# Prose *about* links (directives, docs, commands) — checked for personal data only
-PROSE_DIRS = ("docs/", "Methodology/", ".claude/")
-ALIASES = re.compile(r"^aliases:\s*\n((?:\s+-\s+.*\n)+)", re.M)
-WIKILINK = re.compile(r"(?<!!)\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
-EMBED = re.compile(r"!\[\[([^\]|#]+)")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gakulib as g
+
 PERSONAL = [
     (re.compile(r"[\w.+-]+@(?!example\.edu|anthropic\.com)[\w-]+\.(edu|com|org|net)\b"), "email address"),
     (re.compile(r"canvas\.[\w.-]+/courses/\d+"), "LMS course URL"),
-    (re.compile(r"/home/[a-z0-9_]+/"), "absolute home path"),
+    (re.compile(r"/(?:home|Users)/[A-Za-z0-9_.-]+/"), "absolute home path"),
 ]
 ALLOW_PERSONAL = {"LICENSE", "THIRD-PARTY-NOTICES.md"}
+ERRORS = {"dead-link", "missing-embed", "ambiguous-link", "heal-block", "template-syntax", "personal-data"}
 
-def md_files():
-    for dp, dns, fns in os.walk(ROOT):
-        dns[:] = [d for d in dns if d not in SKIP_DIRS]
-        for fn in fns:
-            if fn.endswith(".md"):
-                yield os.path.join(dp, fn)
 
-def main():
-    strict = "--strict" in sys.argv
-    files = list(md_files())
-    names = {}
-    for f in files:
-        rel = os.path.relpath(f, ROOT)
-        if rel.startswith(PROSE_DIRS):
-            continue
-        base = os.path.splitext(os.path.basename(f))[0]
-        names.setdefault(base, []).append(rel)
-        head = open(f, encoding="utf-8").read(2000)
-        am = ALIASES.search(head)
-        if am:
-            for line in am.group(1).splitlines():
-                alias = line.strip().lstrip("-").strip().strip('"')
-                if alias:
-                    names.setdefault(alias, []).append(rel)
-        # also allow path-style links: "Boards/Deadlines", "MATH101 — Calculus I/_Overview"
-        names.setdefault(os.path.splitext(rel)[0], []).append(rel)
-    all_files = set()
-    for dp, dns, fns in os.walk(ROOT):
-        dns[:] = [d for d in dns if d not in SKIP_DIRS]
-        for fn in fns:
-            all_files.add(fn)
-    findings = []
-    for f in files:
-        rel = os.path.relpath(f, ROOT)
-        text = open(f, encoding="utf-8").read()
+def lint(root, cfg, strict=False):
+    idx = g.Index(root, cfg)
+    prose = tuple(cfg["vault"]["prose_dirs"])
+    fm_dirs = tuple(cfg["lint"]["frontmatter_dirs"])
+    scope = tuple(d.rstrip("/") + "/" for d in cfg["heal"]["scope"])
+    findings, inbound, outbound = [], {}, {}
+
+    def add(rel, line, cat, msg):
+        findings.append({"file": rel, "line": line, "category": cat,
+                         "severity": "error" if cat in ERRORS else "warning", "message": msg})
+
+    for rel, fm in idx.notes.items():
+        text = g.read(idx.root / rel)
         in_template = rel.startswith("Templates/")
-        prose = rel.startswith(PROSE_DIRS)
-        for m in WIKILINK.finditer(text) if not prose else ():
-            target = m.group(1).strip()
-            if in_template and ("<%" in target or "{{" in target):
-                continue
-            if target.endswith("/"):  # folder link
-                continue
-            if target not in names and os.path.basename(target) not in names:
-                findings.append(f"{rel}: broken wikilink [[{target}]]")
-        for m in EMBED.finditer(text) if not prose else ():
-            target = m.group(1).strip()
-            if os.path.basename(target) not in all_files and not (in_template):
-                findings.append(f"{rel}: missing embed ![[{target}]]")
-        if os.path.basename(rel) not in ALLOW_PERSONAL:
-            for rx, label in PERSONAL:
-                for m in rx.finditer(text):
-                    findings.append(f"{rel}: {label} '{m.group(0)}'")
-        if "{{" in text and in_template:
-            findings.append(f"{rel}: mustache placeholder — use Templater <% %> syntax")
-        if strict and "⬜" in text and not (rel.startswith("System/") or in_template):
-            findings.append(f"{rel}: unfilled ⬜ placeholder")
-    dupes = {k: v for k, v in names.items() if len(set(v)) > 1 and "/" not in k}
-    for k, v in dupes.items():
-        findings.append(f"duplicate note name '{k}': {sorted(set(v))}")
-    for line in findings:
-        print(line)
-    print(f"{len(files)} notes checked, {len(findings)} finding(s)")
-    return 1 if findings else 0
+        is_prose = rel.startswith(prose)
+
+        if not is_prose:
+            for line, embed, target in g.links(text):
+                if g.is_placeholder(target) or target.endswith("/"):
+                    continue
+                hits = idx.resolve(target)
+                if not hits:
+                    if embed and g.is_attachment(target):
+                        add(rel, line, "missing-embed", f"![[{target}]] — no such file")
+                    elif not in_template:
+                        add(rel, line, "dead-link", f"[[{target}]] — no such note")
+                elif len(hits) > 1 and not in_template:
+                    add(rel, line, "ambiguous-link",
+                        f"[[{target}]] matches {len(hits)} notes — path-qualify it: "
+                        + ", ".join(sorted(h[:-3] if h.endswith(".md") else h for h in hits)))
+                else:
+                    dest = next(iter(hits))
+                    if dest != rel:
+                        outbound.setdefault(rel, set()).add(dest)
+                        inbound.setdefault(dest, set()).add(rel)
+
+        starts, ends, loose = g.heal_markers(text)
+        for line in loose:
+            add(rel, line, "heal-block", "heal marker not at line start (quote it in backticks, or it was pasted into prose)")
+        if len(starts) > 1:
+            add(rel, starts[1], "heal-block", f"{len(starts)} heal blocks — exactly one allowed")
+        if len(starts) != len(ends):
+            add(rel, (starts or ends)[0], "heal-block", f"unbalanced heal markers ({len(starts)} start, {len(ends)} end)")
+        elif len(starts) == 1:
+            _, _, tail = g.split_heal(text)
+            if tail.strip():
+                add(rel, ends[0], "heal-block", "content after the heal block — the block must close the note")
+
+        if in_template and "{{" in text:
+            add(rel, 1, "template-syntax", "mustache placeholder — use Templater <% %> syntax")
+        if rel.startswith(fm_dirs) and not fm.get("type"):
+            add(rel, 1, "missing-frontmatter", "no `type:` in frontmatter")
+        if strict and "⬜" in text and not (rel.startswith("System/") or in_template or is_prose):
+            add(rel, 1, "placeholder", "unfilled ⬜ placeholder")
+        if cfg["lint"]["personal_scan"] and Path(rel).name not in ALLOW_PERSONAL:
+            for i, ln in enumerate(text.splitlines(), 1):
+                for rx, label in PERSONAL:
+                    for m in rx.finditer(ln):
+                        add(rel, i, "personal-data", f"{label} '{m.group(0)}'")
+
+    for rel in idx.notes:
+        if rel.startswith(scope) and not inbound.get(rel) and not outbound.get(rel):
+            add(rel, 1, "orphan", "no links in or out")
+    for name, rels in idx.duplicates().items():
+        add(rels[0], 1, "duplicate-name", f"'{name}' is shared by {len(rels)} notes: {', '.join(rels)}"
+            " — bare links to it are ambiguous")
+
+    allow = cfg["lint"]["allow"]
+    kept = [f for f in findings if not any(a in fmt(f) for a in allow)]
+    return len(idx.notes), sorted(kept, key=lambda f: (f["severity"] != "error", f["file"], f["line"]))
+
+
+def fmt(f):
+    return f"{f['file']}:{f['line']}: [{f['category']}] {f['message']}"
+
+
+def main(argv):
+    root = g.vault_root(argv)
+    cfg = g.load_config(root)
+    strict = "--strict" in argv
+    n, findings = lint(root, cfg, strict)
+    errors = sum(f["severity"] == "error" for f in findings)
+    warnings = len(findings) - errors
+    if "--json" in argv:
+        print(json.dumps({"notes": n, "errors": errors, "warnings": warnings, "findings": findings}, indent=1))
+    else:
+        for f in findings:
+            print(("E " if f["severity"] == "error" else "W ") + fmt(f))
+        print(f"{n} notes checked: {errors} error(s), {warnings} warning(s)")
+    return 1 if errors or (strict and warnings) else 0
+
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))
