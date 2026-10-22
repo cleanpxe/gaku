@@ -65,7 +65,7 @@ Gear analogy: two gears, ratio 3:1 then 2:1 → overall 6:1. That's the multipli
 
 ## Connections
 
-- [[Derivative Rules]] · [[Reading - 3.4 The Chain Rule]] · [[Cheat Sheet - Exam 1]]
+- [[Derivative Rules]] · [[Reading - 3.4 The Chain Rule]] · [[Cheat Sheet - MATH101 Exam 1]]
 
 ---
 

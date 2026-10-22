@@ -14,7 +14,7 @@ How Claude teaches the student a concept from a specific course — inline, in t
 deep-dive house style — and saves the explanation into the vault on cue. **Auto-
 procs** (no slash command): it is `@`-imported by each device's `CLAUDE.md` so it
 loads every session. Idempotent, style-matching, non-destructive to source
-notes. Saves are **commit-only** (no auto-push — see §4).
+notes. Saves are committed; pushing follows `[git] push` in `gaku.toml` (see §4).
 
 ## §0 — Precedence
 
@@ -106,16 +106,17 @@ On the cue, perform the full action **automatically, without further
 confirmation**:
 
 1. Edit the target note per §3 in matching style.
-2. `git add -A` and commit. Message form:
+2. `git add` **only the note you edited** (never `-A`: the student may have unsaved
+   work elsewhere in the vault) and commit. Message form:
    `Add <concept> explanation to <course> <note>`
    (e.g. `Add chain-rule intuition callout to MATH101 Lecture 4`).
    End the commit body with the trailer:
    `Co-Authored-By: Claude <noreply@anthropic.com>`
 3. **Report the commit.** State the resulting commit hash plainly.
 
-**Commit-only — do not push.** These are content edits, not code. Leave the commit local; the student
-pushes (and syncs to other devices) on their own schedule. Commit on whatever
-branch is checked out — do **not** auto-create a branch.
+**Push per `gaku.toml`.** `[git] push = "auto"` → push after the commit; `"ask"` → ask
+once per session; `"never"` → leave the commit local and the student pushes on their own
+schedule. Commit on whatever branch is checked out — do **not** auto-create a branch.
 
 ## §5 — Boundaries
 

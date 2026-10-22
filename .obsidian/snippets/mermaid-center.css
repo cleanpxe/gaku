@@ -1,0 +1,17 @@
+/* Center Mermaid diagrams horizontally in reading view and live preview */
+
+.block-language-mermaid,
+.markdown-rendered .mermaid,
+.markdown-preview-view .mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.block-language-mermaid > svg,
+.markdown-rendered .mermaid > svg,
+.markdown-preview-view .mermaid > svg {
+  margin-inline: auto;
+  max-width: 100%;
+  height: auto;
+}

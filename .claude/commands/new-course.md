@@ -1,3 +1,7 @@
+---
+description: "Create a course from its syllabus: overview, every deadline on the board, professor note, pinch points. Use for 'new course', 'add <course>', 'here is the syllabus for'."
+argument-hint: "<syllabus PDF / URL / paste>"
+---
 Create a course from its syllabus. Input: $ARGUMENTS — a PDF path, a URL, pasted text,
 or nothing (then ask me to paste the syllabus or describe the course).
 

@@ -15,7 +15,7 @@ exam: 1
 # Reading - 3.4 The Chain Rule
 
 ## For future Claude
-Ingested from `Inbox/MATH101/Reading - 3.4 The Chain Rule.md`. Student's reading notes on the textbook section, verbatim. Enriches [[Derivative Rules]]; feeds the *Chain rule* subsegment of [[Cheat Sheet - Exam 1]].
+Ingested from `Inbox/MATH101/Reading - 3.4 The Chain Rule.md`. Student's reading notes on the textbook section, verbatim. Enriches [[Derivative Rules]]; feeds the *Chain rule* subsegment of [[Cheat Sheet - MATH101 Exam 1]].
 
 ---
 

@@ -23,8 +23,8 @@ gear effort: full pipeline only where it pays.
 
 1. `Courses/<CODE — Name>/_Overview.md` — grade breakdown, Units → Exams map, syllabus
    language about the exam (format, open/closed book, calculator, what it covers).
-2. `Assessments/Exam <n>.md` if it exists (logistics, posted review).
-3. `Cheat Sheets/Cheat Sheet - Exam <n>.md` if it exists.
+2. `Assessments/<CODE> Exam <n>.md` if it exists (logistics, posted review).
+3. `Cheat Sheets/Cheat Sheet - <CODE> Exam <n>.md` if it exists.
 4. Every concept note whose `exam` matches, and the typed notes that link to them.
 5. `Boards/Deadlines.md` + `Synthesis/Schedule Pinch Points.md` — how many days,
    what else collides.
@@ -32,7 +32,7 @@ gear effort: full pipeline only where it pays.
    directly: *"Has the professor said or shown where exam questions come from?
    Old exams, homework, lecture examples, textbook?"*
 
-## §2 — Output: one note, `Assessments/Exam <n> — Prep Plan.md`
+## §2 — Output: one note, `Assessments/<CODE> Exam <n> — Prep Plan.md`
 
 Frontmatter: `type: exam-prep`, `course`, `exam`, `exam-date`, `ai-first: true`,
 `generated_by: claude-exam-prep`, `status: living`.
@@ -49,7 +49,7 @@ Sections, in order:
    "quiz me on unit 2 formulas"). Front-load gap-filling, end with cold recall.
 4. **Recall drills** — 10–20 short prompts Claude can quiz the student with, drawn
    only from the concept notes and cheat sheet (never fabricated numbers).
-5. **Day-of checklist** — logistics from `Assessments/Exam <n>.md`: time, room,
+5. **Day-of checklist** — logistics from `Assessments/<CODE> Exam <n>.md`: time, room,
    allowed materials, ID, calculator.
 
 ## §3 — Rules

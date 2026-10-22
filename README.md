@@ -25,8 +25,13 @@ updates the cheat sheet for the exam it will appear on.
   approach tied to the homework problems that use it.
 - **Deadlines board + pinch points** — not just *what's due* but *which weeks collide*.
 - **A dashboard** (Dataview): due soon, active courses, cheat sheets, stub concepts.
+- **Deck-first lectures** — download the slides, say "skeleton": the deck is filed,
+  re-downloads are caught, slides are rendered, and a fill-in skeleton is waiting before
+  class starts.
 - **Self-healing links** — `/heal` weaves cross-course connections into hidden managed
   blocks. It never touches your words.
+- **Scripts for the mechanical parts** — lint, heal, intake and rename are tested,
+  standard-library Python, so the AI does judgment and the scripts do bookkeeping.
 - **Academic-integrity by design** — a per-course `ai-policy` field the pipeline obeys.
 
 ## Quickstart
@@ -52,8 +57,10 @@ Full walkthrough: [`docs/SETUP.md`](docs/SETUP.md).
 | `Homework - ` | `Homework/` (your solved set, post-submission) | concept *problem types*, cheat sheet *assigned* scenarios |
 | `Examples - Ch N` | `Examples/` | cheat sheet worked examples |
 | `Review - Ch N` | `Reviews/` | audits the concept note |
+| `Review - <exam>` | `Reviews/` (the instructor's exam review) | audits that exam's cheat sheet |
+| `Video - ` / `Handout - ` | `Videos/` / `Handouts/` | concept notes, cheat sheet |
 | `Assignment - ` | `Assignments/` (logistics, pre-completion) | Deadlines board |
-| `Exam N` / `Quiz - ` | `Assessments/` | Deadlines board |
+| `Exam N` / `Quiz N` | `Assessments/<CODE> Exam N` | Deadlines board |
 | `Lab - ` | `Labs/` | concept notes |
 | `Note - ` | course root — it *is* a concept note | — |
 
@@ -66,10 +73,15 @@ Unknown prefix → the pipeline **stops and asks**. It never guesses.
 | `/new-semester` | Wizard: who you are, term, courses → profile, facts, folders, boards |
 | `/new-course <syllabus>` | Syllabus (PDF / URL / paste) → `_Overview`, every deadline on the board, professor in `People/`, pinch points re-derived |
 | `/ingest-notes [CODE]` | File everything in `Inbox/` per the contract; enrich concepts; update cheat sheets |
+| `/skeleton [CODE] [deck]` | Deck-first: file the downloaded deck, render slides, write a fill-in skeleton, then ingest |
 | `/week` | This week's deliverables, pinch level, order of attack → daily note |
 | `/exam-prep <CODE> <n>` | Finds where the exam *actually* comes from, audits coverage, writes a day-by-day ladder + recall drills |
 | `/heal` | Vault-wide linking pass + immutable snapshot |
 | `/archive-semester` | Statuses, boards, retrospective |
+
+You rarely need to type them: each command lists the plain phrases that trigger it
+("ingest MATH101 lecture 5", "skeleton first", "heal / lint"), and `CLAUDE.md` has a
+Phrasebook for the rest.
 
 And **Learning Mode** needs no command: ask *"explain the chain rule from lecture 4"*, get
 taught in chat, say **"write it down"** and it's saved into the note and committed.
@@ -99,6 +111,8 @@ Next term   Use this template again
 | `Methodology/` | The directives: ingestion · learning mode · heal · exam prep |
 | `System/` | `PROFILE.md` · `CRITICAL_FACTS.md` · `index.md` · `log.md` |
 | `CLAUDE.md` | Operating manual — the authoritative spec every directive defers to |
+| `gaku.toml` | Settings: push policy, lint, heal scope, intake |
+| `scripts/` · `tests/` | Lint, heal, intake, rename — and their tests |
 | `docs/` | [Setup](docs/SETUP.md) · [Workflow](docs/WORKFLOW.md) · [Customizing](docs/CUSTOMIZING.md) · [Academic integrity](docs/ACADEMIC-INTEGRITY.md) · [FAQ](docs/FAQ.md) |
 
 ## Academic integrity
@@ -119,7 +133,8 @@ Obsidian half stands on its own.
 
 Issues and PRs welcome — especially new note types for disciplines the routing table
 doesn't cover well (labs, studio critiques, case briefs, language drills). Run
-`python3 scripts/check_vault.py` before opening a PR.
+`python3 scripts/check_vault.py` and `python3 -m unittest discover -s tests` before
+opening a PR. What's planned: [`docs/ROADMAP-2.0.md`](docs/ROADMAP-2.0.md).
 
 ## License
 

@@ -14,7 +14,7 @@ status: living
 # Derivative Rules
 
 ## For future Claude
-Unit 2 backbone concept for [[MATH101 — Calculus I]]: the algebraic rules for differentiating combinations of functions. Feeds [[Cheat Sheet - Exam 1]]. Demo content — fabricated course, real math.
+Unit 2 backbone concept for [[MATH101 — Calculus I]]: the algebraic rules for differentiating combinations of functions. Feeds [[Cheat Sheet - MATH101 Exam 1]]. Demo content — fabricated course, real math.
 
 ---
 
@@ -56,7 +56,7 @@ Unit 2 backbone concept for [[MATH101 — Calculus I]]: the algebraic rules for 
 
 - Builds on: definition of the derivative (Unit 1).
 - Used by: related rates and implicit differentiation (Unit 3) — every related-rates problem is a chain rule in $t$.
-- [[Cheat Sheet - Exam 1]]
+- [[Cheat Sheet - MATH101 Exam 1]]
 
 ## Questions / Follow-up
 
@@ -65,5 +65,5 @@ Unit 2 backbone concept for [[MATH101 — Calculus I]]: the algebraic rules for 
 %% claude-heal:start | generated 2026-08-24T00:00:00Z | DO NOT EDIT INSIDE %%
 **Related (same unit):** [[Reading - 3.4 The Chain Rule]] · [[Lecture - 4 Chain Rule]] · [[Homework - 3.1-3.4]]
 **Related (forward):** Unit 3 related rates — chain rule in $t$.
-**Assessed on:** [[Cheat Sheet - Exam 1]]
+**Assessed on:** [[Cheat Sheet - MATH101 Exam 1]]
 %% claude-heal:end %%

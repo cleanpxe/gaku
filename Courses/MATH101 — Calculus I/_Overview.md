@@ -15,12 +15,15 @@ credits: "4"
 course-site: ""
 textbook: "Any standard single-variable calculus text (chapter numbers below follow a typical Ch 3 = Differentiation Rules layout)"
 ai-policy: explain-only
+source-dir: "~/School/MATH101"
+deck-pattern: 'Lecture (?P<n>\d+) (?P<title>.+)\.pdf'
+deck-offset: 0
 ---
 
 # MATH101 — Calculus I
 
 ## For future Claude
-**Demo course — every fact here is fabricated** to show what `/new-course` + `/ingest-notes` produce. Delete this folder (and [[Dr. Ada Example]]) once the shape is clear; `/new-semester` offers to. Standard single-variable calculus: limits → derivatives → applications → integrals. `ai-policy: explain-only` — explain and quiz, never write the homework.
+**Demo course — every fact here is fabricated** to show what `/new-course` + `/ingest-notes` produce. Delete this folder (and [[Dr. Ada Example]]) once the shape is clear; `/new-semester` offers to. Standard single-variable calculus: limits → derivatives → applications → integrals. `ai-policy: explain-only` — explain and quiz, never write the homework. `source-dir` / `deck-pattern` / `deck-offset` tell `scripts/intake.py` where this course's downloaded decks go and how their numbers map to lecture notes.
 
 ---
 
@@ -53,7 +56,7 @@ ai-policy: explain-only
 | Date | Event |
 |---|---|
 | Week 3 Fri | HW 3 — Differentiation rules |
-| Week 5 Fri | **Exam 1** (Units 1–2) |
+| Week 5 Fri | **[[MATH101 Exam 1\|Exam 1]]** (Units 1–2) |
 | Week 10 Fri | **Exam 2** (Units 3–4) |
 | Finals week | Final |
 
@@ -88,7 +91,7 @@ ai-policy: explain-only
 
 ## Cheat Sheets
 
-- [[Cheat Sheet - Exam 1]]
+- [[Cheat Sheet - MATH101 Exam 1]]
 
 ## My Questions
 

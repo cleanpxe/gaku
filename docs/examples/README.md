@@ -9,7 +9,7 @@
 | Raw drop | Became | Also touched |
 |---|---|---|
 | `Lecture - 4 Chain Rule.md` | `Lectures/Lecture - 4 Chain Rule.md` | `Derivative Rules.md` (Sources, Core Ideas) |
-| `Reading - 3.4 The Chain Rule.md` | `Readings/Reading - 3.4 The Chain Rule.md` | `Derivative Rules.md`; `Cheat Sheets/Cheat Sheet - Exam 1.md` → *Chain rule* subsegment |
+| `Reading - 3.4 The Chain Rule.md` | `Readings/Reading - 3.4 The Chain Rule.md` | `Derivative Rules.md`; `Cheat Sheets/Cheat Sheet - MATH101 Exam 1.md` → *Chain rule* subsegment |
 | `Homework - 3.1-3.4.md` | `Homework/Homework - 3.1-3.4.md` | `Derivative Rules.md` → *Problem types*; cheat sheet → *assigned* scenarios |
 
 Everything in the demo course is fabricated. Delete it when you no longer need the reference.

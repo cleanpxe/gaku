@@ -1,3 +1,6 @@
+---
+description: "Bootstrap a new term: profile, facts, one course per syllabus, boards. Use for 'new semester', 'set up the term', 'start fall'."
+---
 Bootstrap a new semester in this vault. Follow root CLAUDE.md.
 
 1. Ask me, in one message: name, school/program, year, timezone, term name + start/end

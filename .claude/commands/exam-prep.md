@@ -1,3 +1,7 @@
+---
+description: "Exam prep plan for one exam: find where the exam actually comes from, audit coverage, write a day-by-day ladder and recall drills. Use for 'prep for <course> exam <n>', 'make a study plan for the midterm', 'what should I study for'."
+argument-hint: "<CODE> <exam>"
+---
 Load and execute @Methodology/exam-prep-directive.md for: $ARGUMENTS
 (expected form: `<COURSE CODE> <exam number or name>`, e.g. `MATH101 1`).
 

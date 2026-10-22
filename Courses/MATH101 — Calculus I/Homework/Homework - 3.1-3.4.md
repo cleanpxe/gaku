@@ -14,7 +14,7 @@ exam: 1
 # Homework - 3.1-3.4
 
 ## For future Claude
-The student's **own solved** HW 3 (ingested post-completion from `Inbox/MATH101/Homework - 3.1-3.4.md`). Exam-gold: these are the problems that get tested. Each problem is bound to a *Problem type* in [[Derivative Rules]] and the *assigned* scenarios in [[Cheat Sheet - Exam 1]]. Fabricated demo — problem numbers are invented.
+The student's **own solved** HW 3 (ingested post-completion from `Inbox/MATH101/Homework - 3.1-3.4.md`). Exam-gold: these are the problems that get tested. Each problem is bound to a *Problem type* in [[Derivative Rules]] and the *assigned* scenarios in [[Cheat Sheet - MATH101 Exam 1]]. Fabricated demo — problem numbers are invented.
 
 ---
 
@@ -53,4 +53,4 @@ Line: $y - 2 = \frac{1}{2}(x - 1)$.
 
 ## Connections
 
-- [[Derivative Rules]] · [[Cheat Sheet - Exam 1]] · [[Reading - 3.4 The Chain Rule]]
+- [[Derivative Rules]] · [[Cheat Sheet - MATH101 Exam 1]] · [[Reading - 3.4 The Chain Rule]]

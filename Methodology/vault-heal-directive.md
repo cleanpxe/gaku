@@ -7,9 +7,10 @@ generated_by: claude
 
 # Vault Self-Heal Directive
 
-> **How to run:** From Claude Code in the vault root, point it at this file
-> (e.g. `@vault-heal-directive.md run the heal`) or invoke the optional
-> `/heal` command in Appendix A. Re-run anytime; it converges.
+> **How to run:** From Claude Code in the vault root, say "heal" or run `/heal`
+> (`.claude/commands/heal.md`). The judgment (which notes should point where, and
+> why) is yours; the mechanics (validating targets, writing blocks, proving
+> convergence) are `scripts/heal.py` (§8). Re-run anytime; it converges.
 
 ---
 
@@ -67,8 +68,39 @@ Use the vault's existing managed-block convention if one exists. Otherwise:
   reading view and never clutters the human-authored note.
 - **On re-run:** locate the block by its delimiters and **replace its entire
   contents**. If absent, create one — placed at the end of the note body, below
-  human content. Exactly **one** heal block per note.
+  human content. Exactly **one** heal block per note, and it is the **last thing**
+  in the note.
+- **Markers count only at the start of a line.** Directives and docs quote the
+  marker in backticks; a detector that matches it mid-line will paste a block into
+  that prose. `scripts/check_vault.py` reports a marker that isn't at line start,
+  more than one block, unbalanced markers, and text after a block.
+- The block's timestamp changes only when its content does, so an unchanged re-run
+  is byte-identical.
 - Never touch managed blocks belonging to *other* tools.
+
+Standard block (what `scripts/heal.py` writes for a new one; the *Siblings* query
+appears for notes with a `course:` field, or `type: project`):
+
+````
+%% claude-heal:start | generated <ISO8601> | DO NOT EDIT INSIDE %%
+
+### 🔗 Connections — auto-woven (heal)
+
+**Linked from (live backlinks):**
+```dataview
+LIST WHERE contains(file.outlinks, this.file.link)
+```
+
+**Siblings (live):**
+```dataview
+LIST WHERE course = this.course AND file.name != this.file.name SORT file.name ASC
+```
+
+**Semantic threads:**
+- [[Target note]] — three to ten word reason
+
+%% claude-heal:end %%
+````
 
 ---
 
@@ -196,16 +228,33 @@ refreshed, snapshot filename, anomalies. **Never rewrite prior entries.**
 
 0. **Conform** — read existing config; detect conventions; set precedence
    (existing setup wins).
-1. **Inventory** *(read-only)* — index every note: frontmatter, tags, links
-   in/out, domain, clusters, orphans.
-2. **Plan** *(read-only)* — compute proposed managed-region contents per note +
-   MOC refreshes; present a diff/summary of what **will** change before
-   writing. **On first run, pause for confirmation.** On later runs, proceed if
-   no destructive operation is implied (there never should be).
-3. **Apply** — write/replace managed regions in notes; refresh MOCs + index
-   (live queries).
-4. **Snapshot** — compute via Dataview, write the **frozen** static snapshot.
-5. **Log** — append the run record.
+1. **Inventory** *(read-only)* — `python3 scripts/heal.py inventory` lists the notes
+   in `[heal] scope` (gaku.toml) and which lack a block; read the new and changed
+   notes yourself for content.
+2. **Plan** *(read-only)* — draft the threads as a proposals file in a scratch
+   directory (not the vault):
+
+   ```json
+   {"blocks":  {"Courses/MATH101 — Calculus I/Derivative Rules.md": [["Lecture - 4 Chain Rule", "where the chain rule is first derived"]]},
+    "reverse": [["Courses/MATH101 — Calculus I/Lectures/Lecture - 4 Chain Rule.md", "Derivative Rules", "the rule table this lecture extends"]]}
+   ```
+
+   `blocks` = threads for a note's own block; `reverse` = bridges back from existing
+   notes into the new ones. Path-qualify any target whose name is shared. At scale
+   (dozens of new notes), split the drafting by course and merge the JSON.
+   `python3 scripts/heal.py apply <file>` is the dry run: it rejects dead, ambiguous
+   and self targets and glosses outside 3–10 words, and prints what will change.
+   **On first run in a vault, show that summary and pause for confirmation.** Later
+   runs proceed.
+3. **Apply** — `python3 scripts/heal.py apply <file> --write` (`--refresh` also
+   replaces glosses of threads that already exist). It refuses any write that would
+   change a byte outside a block, then re-plans and must report 0 changes
+   (converged). Refresh MOCs + index (live queries) by hand if the vault keeps them.
+4. **Lint** — `python3 scripts/check_vault.py`; fix what the run caused.
+5. **Snapshot** — compute via Dataview or the inventory, write the **frozen** static
+   snapshot.
+6. **Log** — append the run record, including the method (proposals file,
+   counts the script printed) so the run can be reproduced. Then commit.
 
 Same vault state ⇒ same format and same converged structure.
 
@@ -225,29 +274,24 @@ varies.
 
 ---
 
-## Appendix A — optional `/heal` slash command
+## Appendix A — conformance notes for gaku vaults
 
-Additive only — a new file that changes nothing existing. If a `heal` command
-already exists in `.claude/commands/`, **rename this** instead of overwriting.
-Save as `.claude/commands/heal.md`:
+Defaults this directive assumes in a gaku vault. A vault's own `CLAUDE.md` overrides them.
 
-```
-Load and execute @vault-heal-directive.md.
-Obey its §0 precedence rules: this vault's existing .claude/ config and
-CLAUDE.md are authoritative and win on any conflict. Run phases 0–5 in order;
-pause after the Plan phase for my confirmation on the first run.
-```
-
----
-
-## Appendix B — vault-specific conformance notes (gaku vault, recorded 2026-06-14 run 1)
-
-These are the gaps this directive filled on first run in **this** vault (`Documents/学`). Future runs should honor them:
-
-- **Managed-block marker:** `%% claude-heal:start | generated <ISO> | DO NOT EDIT INSIDE %%` … `%% claude-heal:end %%`, one per note, at EOF below human content. Inner heading used: `### 🔗 Connections — auto-woven (heal)`.
-- **Immutable exclusion (hard):** never write heal blocks into `Inbox/**` (raw drops are immutable). Also excluded: `Boards/`, `Daily/`, `Templates/`, `System/`, `docs/`, `_trash/`, and root files (`Home.md`, `CLAUDE.md`, `README.md`).
-- **MOCs:** `Synthesis/{Coursework,Project Builds,Research} MOC.md` (`type: moc`). Index managed block lives at the end of `index.md`.
-- **Structural query templates that work here:** topic/lecture notes have `course: "[[…]]"` → `LIST WHERE course = this.course AND file.name != this.file.name SORT file.name ASC`; everything else → backlinks-only `LIST WHERE contains(file.outlinks, this.file.link)`.
-- **`_Overview` basename collision:** many folders have `_Overview.md`; bare `[[_Overview]]` is ambiguous → always path-qualify (`[[CS225 — Data Structures/_Overview]]`) or link a concept note instead.
-- **Snapshots:** `Snapshots/<YYYY-MM-DD>-<season>.md` (frozen) + append-only `Snapshots/_heal-log.md`.
-- **Domains:** coursework = `Courses/`; project builds = `Projects/`; research = AV-lab tracks (Control/Perception/ROS2, which also live under `Courses/`) + `Synthesis/` + `Methodology/` + `Hypotheses/`.
+- **Scope:** `[heal] scope` in `gaku.toml` (default `Courses/`, `Projects/`, `People/`,
+  `Synthesis/`, `Sources/`). Never write blocks into `Inbox/` (raw drops are the
+  student's), `Boards/`, `Daily/`, `Templates/`, `System/`, `docs/`, `Snapshots/`, or root
+  files (`Home.md`, `CLAUDE.md`, `README.md`).
+- **Structural queries:** notes with `course: "[[…]]"` get the course-siblings query;
+  `type: project` notes get `LIST WHERE type = "project" …`; everything else gets
+  backlinks only.
+- **Shared names:** every course has an `_Overview.md`, so link it path-qualified
+  (`[[MATH101 — Calculus I/_Overview]]`) or link the course by its alias
+  (`[[MATH101 — Calculus I]]`). The script rejects ambiguous targets.
+- **Renames between runs:** use `scripts/rename_note.py`; it rewrites links inside heal
+  blocks too, so no thread goes dead. `python3 scripts/heal.py check` lists any that did.
+- **Snapshots:** `Snapshots/<YYYY-MM-DD>-<season>.md` (frozen) + append-only
+  `Snapshots/_heal-log.md` (union-merged in `.gitattributes`, so two machines don't
+  conflict on it).
+- **MOCs** are optional. If the vault keeps them, put them in `Synthesis/` with
+  `type: moc`.

@@ -11,10 +11,10 @@ status: in-progress
 weight: "20%"
 ---
 
-# Exam 1
+# MATH101 Exam 1
 
 ## For future Claude
-Logistics note (not the cheat sheet — that's [[Cheat Sheet - Exam 1]]). Demo: Week 5 Friday, Units 1–2, 50 min, closed book, no calculator. `/exam-prep MATH101 1` writes `Exam 1 — Prep Plan.md` beside this.
+Logistics note (not the cheat sheet — that's [[Cheat Sheet - MATH101 Exam 1]]). Demo: Week 5 Friday, Units 1–2, 50 min, closed book, no calculator. `/exam-prep MATH101 1` writes `MATH101 Exam 1 — Prep Plan.md` beside this.
 
 ---
 
@@ -29,4 +29,4 @@ Logistics note (not the cheat sheet — that's [[Cheat Sheet - Exam 1]]). Demo: 
 
 ## Prep
 
-- [[Cheat Sheet - Exam 1]] · [[Derivative Rules]] · [[Homework - 3.1-3.4]]
+- [[Cheat Sheet - MATH101 Exam 1]] · [[Derivative Rules]] · [[Homework - 3.1-3.4]]

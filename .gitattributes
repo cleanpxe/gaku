@@ -1,0 +1,3 @@
+# Append-only logs: on a two-machine merge, keep both sides' new entries instead of conflicting.
+System/log.md merge=union
+Snapshots/_heal-log.md merge=union

@@ -11,7 +11,8 @@ status: active
 # Note Ingestion Directive
 
 How to ingest the student's raw course notes into the structured vault. Invoked by
-`/ingest-notes`. Idempotent, non-destructive, course-aware.
+`/ingest-notes`, `/skeleton`, or plain phrasing ("ingest MATH101 lecture 5", "skeleton
+first" — see the Phrasebook in `CLAUDE.md`). Idempotent, non-destructive, course-aware.
 
 ## §0 — Precedence
 
@@ -21,11 +22,16 @@ visible in the target course folder and `Templates/` over anything written here.
 
 ## §0.5 — Input sources (what "ingest" runs over)
 
-Ingestion runs over **all concerning course material on input**, from either:
+Ingestion runs over **all concerning course material on input**, from any of:
 
 1. **Raw drops** in `Inbox/<COURSE>/…` — fresh, un-filed notes (the inbox).
 2. **Existing in-vault material** already filed under `Courses/<CODE> — <Name>/` —
    lecture notes, reading notes, chapter notes, concept notes, etc.
+3. **The course's source folder** — the `source-dir:` in its `_Overview` frontmatter,
+   usually outside the vault: slide decks, handouts, review PDFs, recordings, downloaded
+   from the LMS. `scripts/intake.py` files new downloads there (§4E). When asked to
+   "ingest the new lecture", look in the inbox **and** the source folder before
+   concluding there is nothing new.
 
 For **(1)** run the full per-file procedure (§4): create the typed note, enrich
 concepts, build the cheat sheet. For **(2)** the typed note already exists, so
@@ -60,8 +66,10 @@ Courses/<CODE> — <Name>/
 ├── Assessments/          ← Exam <n>, Quiz - …
 ├── Labs/                 ← Lab - …
 ├── Examples/             ← Examples - Ch <n>
-├── Reviews/              ← Review - Ch <n>
-├── Cheat Sheets/         ← Cheat Sheet - Exam <n> (§4A)
+├── Reviews/              ← Review - Ch <n> · Review - <CODE> <exam>
+├── Videos/               ← Video - … (recordings, §4F)
+├── Handouts/             ← Handout - … (worksheets, posted problem sheets)
+├── Cheat Sheets/         ← Cheat Sheet - <CODE> <exam> (§4A)
 └── Coursebook/           ← per-chapter explainers, when a course has a textbook
 ```
 
@@ -76,6 +84,12 @@ a folder, so those get subfolders.
 - **Wikilinks are unaffected.** Obsidian resolves `[[Note Name]]` by filename, not
   path, so moving a note between folders never breaks a link — provided filenames
   stay **unique vault-wide**. Verify uniqueness before any rename.
+- **Exam-keyed notes carry the course code.** Every course has an "Exam 1" and a
+  "Midterm", so a cheat sheet, exam review, prep plan or assessment note names its
+  course: `Cheat Sheet - MATH101 Exam 1`, `Review - MATH101 Midterm`,
+  `Assessments/MATH101 Exam 1.md`. A bare `[[Cheat Sheet - Exam 1]]` is ambiguous the
+  moment a second course has one, and `scripts/check_vault.py` fails on ambiguous links.
+  The same goes for any other generic name: path-qualify `[[MATH101 — Calculus I/_Overview]]`.
 - **Don't repeat the folder name in the filename.** The subfolder already states the
   type, so a redundant prefix is noise in link text and the file switcher. Routing-table
   types keep their `<Type> - <title>` prefix (it's load-bearing for uniqueness across
@@ -96,10 +110,13 @@ a folder, so those get subfolders.
 | `Lecture` | lecture | `Lectures/Lecture - <title>.md` | Lecture Note | matching concept note(s) |
 | `Homework` / `HW` | worked-solutions | `Homework/Homework - <range>.md` | Problem Set (§4D) | concept *Problem types* + cheat-sheet *Common problem-set scenarios* |
 | `Assignment` | assignment (logistics) | `Assignments/Assignment - <title>.md` | Assignment | linked concepts |
-| `Exam` / `Quiz` | assessment | `Assessments/Exam <n>.md` / `Assessments/Quiz - <title>.md` | Assignment | linked concepts |
+| `Exam` / `Quiz` | assessment | `Assessments/<CODE> Exam <n>.md` / `Assessments/<CODE> Quiz <n>.md` | Assignment | linked concepts |
 | `Lab` | lab | `Labs/Lab - <title>.md` | Lecture Note (adapted) | linked concepts |
 | `Example` / `Examples` | worked-example | `Examples/Examples - Ch <n>.md` | Worked Examples (§4B) | concept *Problem types* + cheat-sheet approach subsegments |
-| `Review` | review-summary | `Reviews/Review - Ch <n>.md` | Review (§4C) | verifies concept *Core Ideas / Key Formulas*; links cheat sheet |
+| `Review - Ch <n>` | review-summary (textbook) | `Reviews/Review - Ch <n>.md` | Review (§4C) | verifies concept *Core Ideas / Key Formulas*; links cheat sheet |
+| `Review - <exam>` | exam review (instructor's) | `Reviews/Review - <CODE> <exam>.md` | Review (§4C.2) | **audits the exam's cheat sheet** |
+| `Video` / `Recording` | video | `Videos/Video - <title>.md` | Lecture Note (adapted) | concept notes + cheat sheet (§4F) |
+| `Handout` / `Worksheet` | handout | `Handouts/Handout - <title>.md` | Lecture Note (adapted) | concept *Problem types* |
 | `Note` / `Notes` | topic / concept | `<title>.md` — **course root** | Concept | — (it *is* the concept) |
 
 **Unrecognized keyword → STOP and ask the student** how to route it. Never guess a type.
@@ -152,8 +169,8 @@ Every ingested source's *approaches* are folded into a rich, problem-set-ready
 cheat sheet — every formula highlighted for fast spotting and application.
 Derivations are dropped; pragmatic use is kept.
 
-**One file per exam (the "major unit group"):** `Cheat Sheets/Cheat Sheet - Exam <n>.md`
-(§1.5) — distinct from the `Assessments/Exam <n>.md` logistics note. Claude-owned.
+**One file per exam (the "major unit group"):** `Cheat Sheets/Cheat Sheet - <CODE> Exam <n>.md`
+(§1.5) — distinct from the `Assessments/<CODE> Exam <n>.md` logistics note. Claude-owned.
 
 - Frontmatter: `type: cheat-sheet`, `generated_by: claude-ingest`, `ai-first: true`,
   `course: "[[<CODE> — <Name>]]"`, `exam: <n>`, `status: living`.
@@ -241,6 +258,29 @@ For each `Review` file:
 
 **Idempotency:** archive keyed by `### <heading>`; re-ingesting replaces the matching block in place. The review does **not** create cheat-sheet subsegments (the readings/examples own those) — it only links to them.
 
+### §4C.2 — Exam reviews (`Review - <exam>`)
+
+An **instructor's exam review** — a review session, a narrated video, or a posted slide
+PDF — is the strongest signal of what the exam covers. Its value is the **diff against the
+cheat sheet**, not the transcript. Check for it on the day it unlocks; a review ingested on
+exam day is mostly wasted.
+
+1. **File** `Reviews/Review - <CODE> <exam>.md` (`type: review`, `exam`, `course`):
+   - a **numbered checklist** of every point in the instructor's order, each linked to the
+     cheat-sheet subsegment it lands in (`[[Cheat Sheet - <CODE> <exam>#<subsegment>]]`);
+   - a **coverage table**: stressed · touched · not mentioned, against every cheat-sheet
+     subsegment;
+   - for a video, the lightly corrected transcript (§4F); for a PDF, the slide captions
+     and a 20-question self-test built from them.
+2. **Audit the cheat sheet:** add a `> [!success] Audited against [[Review - <CODE> <exam>]]`
+   callout at its top, and under each subsegment one `**Review adds (<date>)**` line for
+   anything the review phrased or stressed that the sheet lacked. Subsegments the review
+   never mentions get no edit — the coverage table records the gap.
+3. Add a `[[Review - <CODE> <exam>]]` Sources bullet to each concept note it touches.
+
+**Idempotency:** the checklist and table are rewritten in place; `Review adds` lines are
+keyed by date and replaced on re-ingest.
+
 ## §4D — Problem-set ingestion (`Homework` / `HW`)
 
 A `Homework` / `HW` drop is a **worked-solution problem set** — the student's *actually-assigned* problems, solved out (often authored Markdown with KaTeX + inline figures, a numbered problem list, and a quick-reference answer table). This is the **empirical backbone** of exam prep: where §4B textbook `Examples` are illustrative, homework problems are *what actually gets tested*, so they are the strongest grounding for the cheat-sheet **Common problem-set scenarios** and the concept note's **Problem types to recognize**.
@@ -261,6 +301,78 @@ For each `Homework` / `HW` file:
 
 **Idempotency:** archive keyed by `## <problem heading>`; concept/cheat-sheet entries keyed by `HW <range> #M`. Re-ingesting replaces the matching block/line in place, inserts new ones in problem order, and makes no edits when nothing changed.
 
+## §4E — Decks and skeletons (deck-first lectures)
+
+Many courses post the slide deck before class. The pipeline then runs **deck first**: the
+deck becomes a fill-in skeleton the student annotates live, and the full lecture note is
+written around it. Order matters, because the request often lands minutes before class.
+
+1. **Intake.** `python3 scripts/intake.py` plans, `--apply --render` files: it matches each
+   download to a course by the `deck-pattern` in its `_Overview`, reports byte-identical
+   re-downloads instead of filing them twice, moves the deck into `source-dir`, and renders
+   slides to `raw_images/<CODE>-L<N>-slide-NN.png`. `N` = deck number + `deck-offset`
+   (LMS numbering often starts at 0 or skips a week). A download no pattern matches is
+   reported — ask, never guess.
+2. **Skeleton first.** Write `Inbox/<CODE>/Lecture - <N> <title>.md` from
+   `Templates/Lecture Skeleton.md`, then **tell the student it is ready** before doing
+   anything else. Shape, deck order:
+   - a one-paragraph italic header: deck filename, page count, what the vault already
+     has on this topic, and what to listen for;
+   - per slide or slide group: a bold `**p. N — topic.**` line, a *Variables:* list before
+     any equation that introduces symbols (symbol — name — role), the derivation **one
+     equation per line** as centered display math (`$$…$$`), every end result in
+     `\boxed{}`;
+   - the deck's figures where the deck places them, each with a one-line italic caption
+     (figure number, page, what to look for). Raster figures come out with
+     `pdfimages -png`; crop vector figures from a 150-dpi `pdftoppm` render. Name them
+     `raw_images/<CODE>-L<N>-fig<k>-<slug>.png`;
+   - deck errors corrected in place and flagged in an italic line under the equation;
+   - under every block, one or two prompts ("did the professor say why …?") and a
+     trailing empty `-` so the student can type live.
+3. **Then the long ingest** — the lecture note from the deck (every slide image embedded
+   and captioned), concept enrichment, cheat sheet — per §4.
+4. **After class**, re-ingesting the annotated skeleton merges the student's additions
+   into the lecture note (their words verbatim, attributed) and reconciles the cheat sheet.
+
+**Names.** If the filename topic and the cover title differ, name the note after the one
+the student uses and record the other in `source:`. Decks with hidden slides: cite by PDF
+page and say so.
+
+## §4F — Recordings (`Video` / `Recording`)
+
+A lecture recording, a narrated review, or a short course video. Transcribe it when a
+local speech-to-text tool is available (e.g. whisper); otherwise ask for the transcript.
+
+- One note per recording: `Videos/Video - <title>.md`, `type: video`: **Core Ideas**,
+  anything on screen reconstructed from the narration (code, board work), a lightly
+  cleaned transcript, and a **Reconciliation** section against the matching lecture note
+  or worksheet — where the instructor's answer differs from the vault's, the instructor
+  wins and the difference is flagged.
+- Then: source lines in the cheat sheet, Sources bullets in the concept notes, a table
+  row in the course `_Overview`.
+- Re-ingesting rewrites the note in place.
+
+## §4G — Live directives (`claude draw …`)
+
+While typing raw notes in class, the student may leave instructions inline:
+`claude draw the feedback loop`, `table of the cases here (claude)`, `explain PID here
+claude`. When asked to "check" or "go look at" a note:
+
+- scope strictly to the named file; fulfil **only** the tagged lines — a Mermaid block for a
+  diagram, a table for a table, short prose or LaTeX for an explanation — then delete the
+  directive line;
+- leave every untagged line alone: no reformatting, no cleanup, no "fixing" shorthand;
+- **never poll** the file on a timer. The student is typing in it; wait to be asked.
+
+**Diagram style.** `graph LR`, this init line directly under the fence, single-line terse
+labels, one italic caption under the closing fence:
+
+```
+%%{init: {'flowchart': {'nodeSpacing': 22, 'rankSpacing': 34, 'padding': 3, 'curve': 'basis'}, 'themeVariables': {'fontSize': '12px'}}}%%
+```
+
+Centering is done once, by `.obsidian/snippets/mermaid-center.css`, not per diagram.
+
 ## §5 — Idempotency
 
 Re-running on the same file **updates** the existing typed note, re-checks the
@@ -268,12 +380,24 @@ concept enrichment, and re-syncs the cheat-sheet subsegment rather than creating
 duplicates. Match by destination filename / subsegment title. If nothing changed,
 make no edits.
 
+**Scaffolds.** A course may carry pre-built `status: scaffold` lecture notes (expected
+content from the textbook, read-ahead links, questions to bring). On ingest, **merge into
+the scaffold** instead of creating a second note: keep its *Expected content* / *Read
+ahead* / *Questions to bring* sections (tick what the lecture answered), fill in the deck
+and class sections, set `status: ingested`, and if the real lecture's number or title
+differs, rename it with `python3 scripts/rename_note.py` (it rewrites every link).
+Cheat-sheet subsegments marked *Expected — not yet lectured* are reconciled in place when
+the lecture arrives: drop the flag, add the source line, and note anything the lecture
+states differently from the book under **Watch**.
+
 ## §6 — Report
 
 After a run, report per file: type detected, course matched, note created/updated
 (**with its §1.5 destination path**), which concept notes were enriched, and which
-exam cheat sheet / subsegments were updated. Flag any file that was stopped on
-(§2/§3/§4A), plus any subfolder created for the first time.
+exam cheat sheet / subsegments were updated. For deck-first runs, also: what intake
+moved, re-downloads it skipped, slides rendered, and when the skeleton was announced.
+Flag any file that was stopped on (§2/§3/§4A), plus any subfolder created for the first
+time. End with `python3 scripts/check_vault.py` and report its result.
 
 If the touched course is still **flat** (predates §1.5), note that in the report and
 offer a migration — do not migrate unasked.
@@ -292,6 +416,10 @@ to it so re-runs can skip it:
 marker is skipped unless the student explicitly asks to re-ingest it or the file's
 modification time is newer than the marker date. Never delete inbox files; the student
 clears the inbox on their own schedule.
+
+A vault may choose to **track** its inbox in git (to keep raw notes across machines): say
+so in `CLAUDE.md`, remove `Inbox/*` from `.gitignore`, and commit the student's raw-note
+edits in their own commit, separate from Claude's ingest.
 
 ## §8 — Academic-integrity gate
 

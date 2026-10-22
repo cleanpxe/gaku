@@ -1,3 +1,7 @@
+---
+description: "Plan the week: move cards, re-derive pinch points, write a This week block into the daily note. Use for 'plan my week', 'what is due this week', 'week plan'."
+argument-hint: "[week]"
+---
 Plan this week. Follow root CLAUDE.md. $ARGUMENTS may name a week (default: the current one, Mon–Sun, in my timezone from System/CRITICAL_FACTS.md).
 
 1. Read `Boards/Deadlines.md`, `Synthesis/Schedule Pinch Points.md` (create from

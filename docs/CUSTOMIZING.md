@@ -7,6 +7,37 @@
 2. Add the row to `Inbox/README.md` so you remember it.
 3. If it needs its own template, add `Templates/<Type>.md`.
 
+## Settings (`gaku.toml`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `[git] push` | `"ask"` | After committing, Claude pushes (`"auto"`), asks (`"ask"`), or leaves it to you (`"never"`). With `"auto"`, also allow `Bash(git push *)` in `.claude/settings.json`. |
+| `[vault] skip_dirs` / `skip_paths` | `["Inbox"]` / `[]` | Not linted; links resolve into them only when nothing else matches. |
+| `[lint] personal_scan` | `true` | Flag emails, LMS URLs and home paths. Turn off in a private vault. |
+| `[lint] allow` | `[]` | Substrings of lint lines to suppress. |
+| `[heal] scope` | Courses, Projects, People, Synthesis, Sources | Folders that get heal blocks. |
+| `[intake] from` / `extensions` / `dpi` | `~/Downloads` / `["pdf"]` / `110` | Where downloads land, which files intake looks at, slide render resolution. |
+
+## Deck intake for a course
+
+In the course `_Overview.md` frontmatter:
+
+```yaml
+source-dir: "~/School/FA26/MATH101"
+deck-pattern: 'Lecture (?P<n>\d{2}) (?P<title>.+?)(?: \(\d+\))?\.pdf'
+deck-offset: 1
+extra-patterns: ['MATH101 Homework \d+.*\.pdf']
+```
+
+- Single quotes, so the backslashes stay literal.
+- `(?P<n>…)` is the deck number; vault lecture number = `n + deck-offset` (an LMS that
+  numbers from 0, or a course whose first deck is the syllabus). `(?P<title>…)` is optional.
+- The trailing `(?: \(\d+\))?` accepts the browser's ` (1)` re-download suffix.
+- **Make patterns specific.** `Lecture (?P<n>\d+)` alone also matches another course's
+  `Lecture 6 - EDA.pdf`. When two courses' patterns match one file, intake reports it as
+  ambiguous and moves nothing.
+- `extra-patterns` files (homework PDFs, MATLAB files…) are moved as they are, not rendered.
+
 ## Rename or add folders
 
 `CLAUDE.md` → **Folder map** is the source of truth. Update it, then grep the directives

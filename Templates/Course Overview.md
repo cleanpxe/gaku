@@ -12,12 +12,15 @@ credits: ""
 course-site: ""
 textbook: ""
 ai-policy: explain-only
+source-dir: ""
+deck-pattern: ""
+deck-offset: 0
 ---
 
 # <% tp.file.folder() %>
 
 ## For future Claude
-Course map for **<% tp.file.folder() %>**. Holds the syllabus summary, grade breakdown, key dates, and the **unit → exam map** the ingestion pipeline reads. `ai-policy` governs what Claude may do here (see `docs/ACADEMIC-INTEGRITY.md`): `open` · `explain-only` · `filing-only` · `none`.
+Course map for **<% tp.file.folder() %>**. Holds the syllabus summary, grade breakdown, key dates, and the **unit → exam map** the ingestion pipeline reads. `ai-policy` governs what Claude may do here (see `docs/ACADEMIC-INTEGRITY.md`): `open` · `explain-only` · `filing-only` · `none`. Deck intake (`scripts/intake.py`): `source-dir` = where this course's downloads are filed (outside the vault is fine); `deck-pattern` = a regex for the deck filenames, in single quotes, with a `(?P<n>\d+)` group for the deck number and an optional `(?P<title>…)`; `deck-offset` = vault lecture number minus deck number.
 
 ---
 

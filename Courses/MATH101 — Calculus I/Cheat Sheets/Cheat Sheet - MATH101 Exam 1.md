@@ -11,7 +11,7 @@ exam: 1
 status: living
 ---
 
-# Cheat Sheet - Exam 1
+# Cheat Sheet - MATH101 Exam 1
 
 ## For future Claude
 Per-exam recall layer for [[MATH101 — Calculus I]] Exam 1 (Units 1–2), built by ingestion (§4A of the directive). One `##` subsegment per approach, in unit order; each keyed by title so re-ingestion replaces in place. Derivations dropped; use-it-now form kept. Demo — only the Unit 2 chain-rule subsegment is populated.
