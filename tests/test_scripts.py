@@ -93,6 +93,13 @@ class TestLinks(unittest.TestCase):
         text = "[[Before]]\n```python\n[[Inside]]\n\n[[After]]\n"
         self.assertEqual([t for _, _, t in g.links(text)], ["Before"])
 
+    def test_things_that_are_not_fences(self):
+        for text, want in [("```c``` is the syntax\n\n[[After]]\n", ["After"]),
+                           ("```\ncode [[In]]\n````\n[[AfterLong]]\n", ["AfterLong"]),
+                           ("```` ``` ````\n[[AfterQuoted]]\n", ["AfterQuoted"]),
+                           ("~~~\n[[In]]\n```\n~~~\n[[AfterTilde]]\n", ["AfterTilde"])]:
+            self.assertEqual([t for _, _, t in g.links(text)], want, text)
+
     def test_bom_crlf_and_quoted_commas(self):
         fm = g.frontmatter('\ufeff---\r\naliases: ["X, Y", Z]\r\ntype: concept\r\n---\r\nbody')
         self.assertEqual(fm, {"aliases": ["X, Y", "Z"], "type": "concept"})
@@ -391,6 +398,14 @@ class TestRename(unittest.TestCase):
         _, edits, skipped, *_ = rename_note.plan(self.v.root, self.v.cfg, old, "Cheat Sheet - MATH101 Exam 1", same_course=True)
         self.assertEqual(sorted(edits), [f"{COURSE}/Chain Rule.md", old])
         self.assertEqual(len(skipped), 2)  # PHYS101's own note and the Synthesis note stay as they are
+
+    def test_partial_paths_keep_their_depth_and_skip_dirs_are_updated(self):
+        self.v.write("Synthesis/P.md", "[[Cheat Sheets/Cheat Sheet - Exam 1|x]]\n")
+        self.v.write("Inbox/MATH101/Raw.md", "[[Cheat Sheet - Exam 1]]\n")
+        old = f"{COURSE}/Cheat Sheets/Cheat Sheet - Exam 1.md"
+        quiet(rename_note.main, ["rename_note.py", old, "Cheat Sheet - MATH101 Exam 1", "--apply", "--vault", str(self.v.root)])
+        self.assertEqual(self.v.read("Synthesis/P.md"), "[[Cheat Sheets/Cheat Sheet - MATH101 Exam 1|x]]\n")
+        self.assertEqual(self.v.read("Inbox/MATH101/Raw.md"), "[[Cheat Sheet - MATH101 Exam 1]]\n")
 
     def test_slashed_new_without_md(self):
         old = f"{COURSE}/Cheat Sheets/Cheat Sheet - Exam 1.md"

@@ -4,9 +4,11 @@
 Usage: python3 scripts/rename_note.py OLD NEW [--apply] [--same-course] [--vault DIR]
   OLD  vault-relative path of the note, e.g. "Courses/MATH101 — Calculus I/Lectures/Lecture - 4 Chain Rule.md"
   NEW  a bare name (same folder) or a vault-relative path; `.md` is added if missing
-Uses `git mv` inside a git repo. Leaves Snapshots/ alone (they are frozen), keeps
-links that reach the note through one of its `aliases:` (the alias moves with it),
-and preserves each file's line endings.
+Uses `git mv` inside a git repo. Like Obsidian, it rewrites links everywhere —
+skip dirs (raw notes, demo inputs) included — except Snapshots/, which are frozen.
+It keeps links that reach the note through one of its `aliases:` (the alias moves
+with it), keeps a path-qualified link's folder part when the note stays in its
+folder, and preserves each file's line endings.
 
 A bare link that also matches another note is ambiguous and is left alone and
 listed, unless --same-course: then a bare link from a note in the same
@@ -41,7 +43,8 @@ def plan(root, cfg, old, new, same_course=False):
     clash = idx.resolve(new_stem) - {old}
     home = course_of(old)
     edits, skipped, aliased, unreadable = {}, [], 0, []
-    for rel in idx.notes:
+    same_folder = PurePosixPath(new).parent == PurePosixPath(old).parent
+    for rel in sorted(set(idx.notes) | {r for r in idx.secondary if r.endswith(".md")}):
         if rel.startswith(FROZEN):
             continue
         try:
@@ -68,7 +71,10 @@ def plan(root, cfg, old, new, same_course=False):
                 if not mine:
                     skipped.append(f"{rel}: [[{target}]] also matches another note — not rewritten")
                     continue
-            repl = new[:-3] if (path_style or clash) else new_stem  # qualify if the new name is taken
+            if path_style:  # keep the link's own folder part when the note doesn't move
+                repl = f"{bare.rsplit('/', 1)[0]}/{new_stem}" if same_folder else new[:-3]
+            else:
+                repl = new[:-3] if clash else new_stem  # qualify if the new name is taken
             start = m.start(2) + raw.index(target)
             out.append(text[last:start] + repl)
             last = start + len(target)

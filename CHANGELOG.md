@@ -55,6 +55,10 @@ in tested scripts rather than one-off code. Plan for the rest of 2.0:
   lint error instead of a crash; unclosed fences, BOMs, CRLF frontmatter, quoted commas in
   inline lists, `[[Note.md]]` and links to any existing file type resolve correctly;
   `[lint] scope` limits what is reported.
+- Fence detection follows CommonMark (```` ```c``` ```` is inline code; a closing fence may be
+  longer than its opener), so lint and rename never lose the links after such a line.
+  `rename_note.py` keeps a path-qualified link's folder part and, like Obsidian, also
+  updates links in skip dirs.
 
 - The heal directive's Appendix B described one author's personal vault; it is now
   generic conformance notes, and Appendix A no longer points at a wrong path.

@@ -152,8 +152,10 @@ def frontmatter(text):
 
 # --- links -------------------------------------------------------------------
 
-FENCE = re.compile(r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*\r?$", re.S | re.M)
-OPEN_FENCE = re.compile(r"^(`{3,}|~{3,})", re.M)
+# CommonMark fences: a backtick opener's info string has no backtick (so ```c``` is inline
+# code, not a fence), and the closer is the same character, at least as long as the opener.
+FENCE = re.compile(r"^(?:(?P<b>`{3,})[^`\n]*|(?P<t>~{3,})[^\n]*)\n.*?^(?:(?P=b)`*|(?P=t)~*)[ \t]*\r?$", re.S | re.M)
+OPEN_FENCE = re.compile(r"^(?:`{3,}[^`\n]*|~{3,}[^\n]*)$", re.M)
 # An inline code span never crosses a blank line, so a stray backtick can't swallow a paragraph.
 INLINE_CODE = re.compile(r"(`+)(?!`)((?:(?!\n[ \t\r]*\n).)+?)(?<!`)\1(?!`)", re.S)
 LINK = re.compile(r"(!?)\[\[([^\[\]\n]+?)\]\]")
