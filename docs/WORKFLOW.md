@@ -43,7 +43,7 @@ course builds on a previous one).
 ```
 ~/Downloads/Lecture 05 Chain Rule.pdf
    ↓ python3 scripts/intake.py --apply --render     (or just say "skeleton")
-<source-dir>/Lecture 05 Chain Rule.pdf  +  raw_images/MATH101-L5-slide-01.png …
+<source-dir>/Lecture 05 Chain Rule.pdf  +  raw_images/MATH101-L5-slide-01.png …  (page numbers padded to the deck's digit count)
    ↓ /skeleton step 2                                 ← "skeleton ready" — annotate it live
 Inbox/MATH101/Lecture - 5 Chain Rule.md
    ↓ /skeleton step 3 (the long ingest)

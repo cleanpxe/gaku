@@ -81,6 +81,7 @@ scripts above already check.
    `Templates/` files.
 2. `python3 scripts/check_vault.py` — fix the errors, starting with ambiguous links. For
    each exam-keyed note, `python3 scripts/rename_note.py "<path>" "<Type> - <CODE> <exam>"
-   --apply` rewrites its links.
+   --same-course --apply` rewrites its links; `--same-course` takes a bare link from a note
+   in the same course folder to mean that course's note.
 3. Add `source-dir` / `deck-pattern` / `deck-offset` to the courses whose decks you download.
 4. Set `[git] push` in `gaku.toml`.

@@ -310,7 +310,9 @@ written around it. Order matters, because the request often lands minutes before
 1. **Intake.** `python3 scripts/intake.py` plans, `--apply --render` files: it matches each
    download to a course by the `deck-pattern` in its `_Overview`, reports byte-identical
    re-downloads instead of filing them twice, moves the deck into `source-dir`, and renders
-   slides to `raw_images/<CODE>-L<N>-slide-NN.png`. `N` = deck number + `deck-offset`
+   slides to `raw_images/<CODE>-L<N>-slide-<page>.png` (pdftoppm pads `<page>` to the deck's
+   digit count: `-1` under 10 pages, `-01` up to 99), never over slides already rendered for
+   that lecture. `N` = deck number + `deck-offset`
    (LMS numbering often starts at 0 or skips a week). A download no pattern matches is
    reported — ask, never guess.
 2. **Skeleton first.** Write `Inbox/<CODE>/Lecture - <N> <title>.md` from

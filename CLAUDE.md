@@ -107,7 +107,7 @@ Mechanical, repeatable steps run through `scripts/`, not hand edits or throwaway
 | `check_vault.py` | Lint before every commit: dead and ambiguous links, missing embeds, heal-block damage, frontmatter |
 | `heal.py` | Apply the threads you drafted for `/heal`; it validates targets and proves convergence |
 | `intake.py` | File downloaded decks into each course's `source-dir`, skip re-downloads, render slides |
-| `rename_note.py` | Rename or move a note and rewrite every link to it |
+| `rename_note.py` | Rename or move a note and rewrite every link to it (`--same-course` settles bare links a name shared across courses made ambiguous) |
 
 If a run needs a one-off script and the same need comes back, propose adding it to
 `scripts/` (with a test in `tests/`) instead of rewriting it next time.

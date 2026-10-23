@@ -18,7 +18,8 @@ DEFAULTS = {
         "prose_dirs": ["docs/", "Methodology/", ".claude/"],
         "images": "raw_images",
     },
-    "lint": {"personal_scan": True, "allow": [], "frontmatter_dirs": ["Courses/"]},
+    # scope: path prefixes to lint (empty = the whole vault); links still resolve everywhere
+    "lint": {"personal_scan": True, "allow": [], "frontmatter_dirs": ["Courses/"], "scope": []},
     "heal": {
         "scope": ["Courses", "Projects", "People", "Synthesis", "Sources"],
         "gloss_words": [3, 10],
@@ -26,8 +27,8 @@ DEFAULTS = {
     "intake": {"from": "~/Downloads", "extensions": ["pdf"], "dpi": 110},
 }
 
-# Extensions Obsidian treats as attachments. Anything else after a dot is part of
-# the note name (`Reading - 4.3 Torsion`, `Jeff S. Shamma`).
+# Extensions Obsidian treats as attachments (used to word lint messages; resolution
+# checks the filesystem first, so any file type resolves if it exists).
 ATTACHMENT_EXT = {
     ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".avif", ".pdf",
     ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".mp4", ".webm", ".mov", ".mkv",
@@ -38,12 +39,24 @@ HEAL_START = "%% claude-heal:start"
 HEAL_END = "%% claude-heal:end %%"
 
 
+def arg_value(argv, flag, default=None):
+    """The value after `flag` in argv, or default; exits with a message if it's missing."""
+    if flag not in argv:
+        return default
+    i = argv.index(flag)
+    if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+        raise SystemExit(f"{flag} needs a value")
+    return argv[i + 1]
+
+
 def vault_root(argv=None):
     argv = sys.argv if argv is None else argv
-    if "--vault" in argv:
-        return Path(argv[argv.index("--vault") + 1]).expanduser().resolve()
-    if os.environ.get("GAKU_VAULT"):
-        return Path(os.environ["GAKU_VAULT"]).expanduser().resolve()
+    given = arg_value(argv, "--vault") or os.environ.get("GAKU_VAULT")
+    if given:
+        root = Path(given).expanduser().resolve()
+        if not root.is_dir():
+            raise SystemExit(f"not a directory: {root}")
+        return root
     return Path(__file__).resolve().parent.parent
 
 
@@ -85,12 +98,25 @@ def walk(root, cfg, suffix=None, include_skipped=False):
 
 
 def read(path):
+    """Text with line endings normalised to \\n — for reading, never for rewriting a file."""
     return Path(path).read_text(encoding="utf-8")
+
+
+def read_raw(path):
+    """Text exactly as stored (CRLF kept), for scripts that write the file back."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
+def write_raw(path, text):
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
 
 
 # --- frontmatter -------------------------------------------------------------
 
-FM = re.compile(r"\A---\n(.*?)\n---[ \t]*(?:\n|\Z)", re.S)
+FM = re.compile(r"\A\ufeff?---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.S)
+LIST_ITEM = re.compile(r"\"[^\"]*\"|'[^']*'|[^,]+")
 
 
 def _scalar(v):
@@ -98,7 +124,7 @@ def _scalar(v):
     if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
         return v[1:-1]
     if v.startswith("[") and v.endswith("]"):
-        return [_scalar(x) for x in v[1:-1].split(",") if x.strip()]
+        return [_scalar(x) for x in LIST_ITEM.findall(v[1:-1]) if x.strip()]
     return v
 
 
@@ -124,23 +150,27 @@ def frontmatter(text):
     return data
 
 
-def body_offset(text):
-    m = FM.match(text)
-    return m.end() if m else 0
-
-
 # --- links -------------------------------------------------------------------
 
-FENCE = re.compile(r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$", re.S | re.M)
+FENCE = re.compile(r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*\r?$", re.S | re.M)
+OPEN_FENCE = re.compile(r"^(`{3,}|~{3,})", re.M)
 # An inline code span never crosses a blank line, so a stray backtick can't swallow a paragraph.
-INLINE_CODE = re.compile(r"(`+)(?!`)((?:(?!\n[ \t]*\n).)+?)(?<!`)\1(?!`)", re.S)
+INLINE_CODE = re.compile(r"(`+)(?!`)((?:(?!\n[ \t\r]*\n).)+?)(?<!`)\1(?!`)", re.S)
 LINK = re.compile(r"(!?)\[\[([^\[\]\n]+?)\]\]")
 
 
+def _blank(s):
+    return re.sub(r"[^\r\n]", " ", s)
+
+
 def strip_code(text):
-    """Blank out fenced blocks and inline code, keeping line numbers intact."""
-    blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))
-    return INLINE_CODE.sub(blank, FENCE.sub(blank, text))
+    """Blank out fenced blocks and inline code, keeping every offset and line number intact.
+    An unclosed fence runs to the end of the note, as it does in Obsidian."""
+    text = FENCE.sub(lambda m: _blank(m.group(0)), text)
+    m = OPEN_FENCE.search(text)
+    if m:
+        text = text[: m.start()] + _blank(text[m.start():])
+    return INLINE_CODE.sub(lambda m: _blank(m.group(0)), text)
 
 
 def links(text):
@@ -176,15 +206,19 @@ class Index:
         self.root = Path(root)
         self.notes = {}         # relpath -> frontmatter, for notes outside the skip dirs
         self.secondary = set()  # relpaths inside skip dirs/paths
+        self.unreadable = []    # notes that aren't valid UTF-8
         self.by_name = {}       # casefolded stem or alias -> set(relpath)
         self.by_suffix = {}     # casefolded "dir/stem" path suffix -> set(relpath)
-        self.files = {}         # casefolded attachment basename or path suffix -> set(relpath)
+        self.files = {}         # casefolded non-note basename or path suffix -> set(relpath)
         for rel, ap in walk(root, cfg, include_skipped=True):
             if is_skipped(rel, cfg):
                 self.secondary.add(rel)
             if rel.endswith(".md"):
-                text = read(ap)
-                fm = frontmatter(text)
+                try:
+                    fm = frontmatter(read(ap))
+                except UnicodeDecodeError:
+                    fm = {}
+                    self.unreadable.append(rel)
                 if rel not in self.secondary:
                     self.notes[rel] = fm
                 stem = rel[:-3]
@@ -208,9 +242,8 @@ class Index:
     def resolve(self, target):
         """Return the set of files a target could mean (empty = dead link)."""
         t = target.strip()
-        if is_attachment(t):
-            hits = self.files.get(t.casefold(), set())
-        else:
+        hits = self.files.get(t.strip("/").casefold(), set()) if Path(t).suffix else set()
+        if not hits:
             if t.lower().endswith(".md"):
                 t = t[:-3]
             table = self.by_suffix if "/" in t else self.by_name
@@ -243,7 +276,7 @@ def heal_markers(text):
 def split_heal(text):
     """Split a note into (body, block, tail). block is '' when the note has none."""
     # search the code-blanked copy (same offsets) so a block quoted in a fence never matches
-    m = re.search(r"^%% claude-heal:start.*?^%% claude-heal:end %%[ \t]*\n?", strip_code(text), re.S | re.M)
+    m = re.search(r"^%% claude-heal:start.*?^%% claude-heal:end %%[ \t]*\r?\n?", strip_code(text), re.S | re.M)
     if not m:
         return text, "", ""
-    return text[: m.start()], m.group(0), text[m.end():]
+    return text[: m.start()], text[m.start(): m.end()], text[m.end():]

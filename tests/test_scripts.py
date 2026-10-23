@@ -1,5 +1,5 @@
 """Tests for scripts/. Run: python3 -m unittest discover -s tests"""
-import io, json, os, sys, tempfile, unittest
+import io, json, os, shutil, sys, tempfile, unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
@@ -43,6 +43,27 @@ def cats(findings):
     return sorted(f["category"] for f in findings if f["severity"] == "error")
 
 
+def tiny_pdf():
+    """A valid one-page PDF, built by hand so the tests need no PDF library."""
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 72 72] >>"]
+    out, offs = bytearray(b"%PDF-1.4\n"), []
+    for i, o in enumerate(objs, 1):
+        offs.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    for o in offs:
+        out += b"%010d 00000 n \n" % o
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+    return bytes(out)
+
+
+BLOCK = ("%% claude-heal:start | generated 2026-01-01T00:00:00Z | DO NOT EDIT INSIDE %%\n\n"
+         "**Linked from (live backlinks):**\n```dataview\nLIST WHERE contains(file.outlinks, this.file.link)\n```\n\n"
+         "**Semantic threads:**\n{threads}\n%% claude-heal:end %%\n")
+
+
 def quiet(fn, *a):
     with redirect_stdout(io.StringIO()) as out:
         code = fn(*a)
@@ -67,6 +88,14 @@ class TestLinks(unittest.TestCase):
         self.assertEqual(fm["aliases"], ["X — Y"])
         self.assertEqual(fm["tags"], ["a", "b"])
         self.assertEqual(fm["pattern"], r"L(?P<n>\d+)\.pdf")
+
+    def test_unclosed_fence_runs_to_the_end(self):
+        text = "[[Before]]\n```python\n[[Inside]]\n\n[[After]]\n"
+        self.assertEqual([t for _, _, t in g.links(text)], ["Before"])
+
+    def test_bom_crlf_and_quoted_commas(self):
+        fm = g.frontmatter('\ufeff---\r\naliases: ["X, Y", Z]\r\ntype: concept\r\n---\r\nbody')
+        self.assertEqual(fm, {"aliases": ["X, Y", "Z"], "type": "concept"})
 
     def test_attachment_vs_dotted_name(self):
         self.assertTrue(g.is_attachment("fig.svg"))
@@ -114,6 +143,21 @@ class TestLint(unittest.TestCase):
         body, found, tail = g.split_heal(self.v.read("Synthesis/D.md"))
         self.assertIn("More text.", body)
         self.assertEqual(tail, "")
+
+    def test_unreadable_note_is_an_error_not_a_crash(self):
+        self.v.write("Synthesis/Latin1.md", b"caf\xe9 [[Chain Rule]]\n")
+        self.assertEqual(cats(self.v.lint()), ["encoding"])
+
+    def test_md_suffix_and_any_file_type_resolve(self):
+        self.v.write("Synthesis/Data.json.md", "---\ntype: note\n---\n")
+        self.v.write("Synthesis/script.py", "print(1)\n")
+        self.v.write("Synthesis/L.md", "[[Chain Rule.md]] [[chain rule.MD]] [[script.py]] [[Data.json]]\n")
+        self.assertEqual(cats(self.v.lint()), [])
+
+    def test_lint_scope(self):
+        self.v.write("Synthesis/Old.md", "[[Nope]]\n")
+        self.v.write("gaku.toml", '[lint]\nscope = ["Courses/"]\n')
+        self.assertEqual(cats(self.v.lint()), [])
 
     def test_allowlist(self):
         self.v.write("Synthesis/N.md", "[[Nope]]\n")
@@ -165,6 +209,41 @@ class TestHeal(unittest.TestCase):
         self.assertEqual(st["added"], 1)
         self.assertIn("- [[Derivative Rules]]", after)
 
+    def test_adding_to_an_existing_block_keeps_its_queries(self):
+        note = f"{COURSE}/Derivative Rules.md"
+        self.v.write(note, "---\ntype: concept\n---\nOther words.\n\n" + BLOCK.format(threads="- *(none yet — flagged for the next run)*\n"))
+        data = {"blocks": {note: [["Chain Rule", "the composition rule in depth"]]}}
+        code, out = quiet(heal.main, ["heal.py", "apply", self.props(data), "--write", "--vault", str(self.v.root)])
+        self.assertEqual(code, 0, out)
+        text = self.v.read(note)
+        self.assertIn("```dataview\nLIST WHERE contains(file.outlinks, this.file.link)\n```", text)
+        self.assertIn("**Semantic threads:**\n- [[Chain Rule]] — the composition rule in depth\n", text)
+        self.assertNotIn("none yet", text)
+
+    def test_crlf_note_keeps_its_bytes(self):
+        note = f"{COURSE}/Derivative Rules.md"
+        raw = b"---\r\ntype: concept\r\n---\r\nOther words.\r\n"
+        (self.v.root / note).write_bytes(raw)
+        data = {"blocks": {note: [["Chain Rule", "the composition rule in depth"]]}}
+        code, out = quiet(heal.main, ["heal.py", "apply", self.props(data), "--write", "--vault", str(self.v.root)])
+        self.assertEqual(code, 0, out)
+        after = (self.v.root / note).read_bytes()
+        self.assertTrue(after.startswith(raw.rstrip(b"\r\n")))
+        self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
+        more = {"blocks": {note: [["MATH101 — Calculus I/_Overview", "the course map for context"]]}}
+        quiet(heal.main, ["heal.py", "apply", self.props(more), "--write", "--vault", str(self.v.root)])
+        again = (self.v.root / note).read_bytes()
+        self.assertNotIn(b"\n", again.replace(b"\r\n", b""))
+        self.assertIn(b"```dataview\r\nLIST WHERE contains", again)
+
+    def test_refuses_to_append_after_an_unclosed_fence(self):
+        note = f"{COURSE}/Derivative Rules.md"
+        self.v.write(note, "---\ntype: concept\n---\n```\ncode never closed\n")
+        data = {"blocks": {note: [["Chain Rule", "the composition rule in depth"]]}}
+        changes, errors, _ = heal.plan(self.v.root, self.v.cfg, data)
+        self.assertEqual(changes, {})
+        self.assertTrue(errors)
+
     def test_existing_aliased_thread_is_not_duplicated(self):
         block = ("\n%% claude-heal:start | generated 2026-01-01T00:00:00Z | DO NOT EDIT INSIDE %%\n\n"
                  "**Semantic threads:**\n- [[Courses/MATH101 — Calculus I/Derivative Rules|Derivative Rules]] — the rule table this extends\n\n"
@@ -181,11 +260,13 @@ class TestHeal(unittest.TestCase):
         data = {"blocks": {f"{COURSE}/Chain Rule.md": [["_Overview", "which course map is this"],
                                                        ["Nope", "a target that does not exist"],
                                                        ["Chain Rule", "links straight back to itself"],
-                                                       ["Derivative Rules", "too short"]],
+                                                       ["Derivative Rules", "too short"],
+                                                       ["Derivative Rules", "first line\nsecond line here"],
+                                                       ["Derivative Rules", "has ]] inside the gloss text"]],
                            "Boards/Deadlines.md": [["Chain Rule", "boards are outside the scope"]]}}
         changes, errors, _ = heal.plan(self.v.root, self.v.cfg, data)
         self.assertEqual(changes, {})
-        self.assertEqual(len(errors), 5)
+        self.assertEqual(len(errors), 7)
 
     def test_inventory(self):
         code, out = quiet(heal.main, ["heal.py", "inventory", "--json", "--vault", str(self.v.root)])
@@ -229,6 +310,48 @@ class TestIntake(unittest.TestCase):
         self.assertTrue(Path(self.dl.name, "receipt.pdf").exists())
 
 
+    def test_identical_downloads_in_one_batch_file_once(self):
+        Path(self.dl.name, "Lecture 05 Series.pdf").write_bytes(b"deck-five")
+        Path(self.dl.name, "Lecture 05 Series (1).pdf").write_bytes(b"deck-five")
+        _, rows = intake.plan(self.v.root, self.v.cfg, ["intake.py", "--from", self.dl.name])
+        acts = sorted(r["action"] for r in rows if "Series" in r["file"])
+        self.assertEqual(acts, ["duplicate", "move"])
+
+
+@unittest.skipUnless(shutil.which("pdftoppm"), "needs poppler's pdftoppm")
+class TestIntakeRender(unittest.TestCase):
+    def setUp(self):
+        self.dl = tempfile.TemporaryDirectory()
+        self.src = tempfile.TemporaryDirectory()
+        self.v = Vault({f"{COURSE}/_Overview.md": (
+            "---\ntype: course\n"
+            f'source-dir: "{self.src.name}"\n'
+            "deck-pattern: 'Lecture (?P<n>\\d+) (?P<title>.+)\\.pdf'\ndeck-offset: 1\n---\n")})
+
+    def tearDown(self):
+        self.v.close(); self.dl.cleanup(); self.src.cleanup()
+
+    def run_intake(self):
+        return quiet(intake.main, ["intake.py", "--from", self.dl.name, "--apply", "--render", "--vault", str(self.v.root)])
+
+    def test_renders_never_overwrite_and_bad_pdfs_dont_stop_the_batch(self):
+        Path(self.dl.name, "Lecture 01 Limits.pdf").write_bytes(tiny_pdf())
+        self.run_intake()
+        slides = sorted((self.v.root / "raw_images").glob("MATH101-L2-slide-*.png"))
+        self.assertEqual(len(slides), 1)
+        stamp = slides[0].stat().st_mtime_ns
+        Path(self.dl.name, "Lecture 01 Limits v2.pdf").write_bytes(tiny_pdf() + b"% v2\n")
+        Path(self.dl.name, "Lecture 03 Broken.pdf").write_bytes(b"not a pdf")
+        Path(self.dl.name, "Lecture 04 Next.pdf").write_bytes(tiny_pdf() + b"% four\n")
+        code, out = self.run_intake()
+        self.assertEqual(code, 0, out)
+        self.assertIn("already exist", out)
+        self.assertIn("render failed", out)
+        self.assertEqual(slides[0].stat().st_mtime_ns, stamp)
+        self.assertTrue(Path(self.src.name, "Lecture 04 Next.pdf").exists())
+        self.assertTrue(list((self.v.root / "raw_images").glob("MATH101-L5-slide-*.png")))
+
+
 class TestRename(unittest.TestCase):
     def setUp(self):
         self.v = Vault({
@@ -256,9 +379,34 @@ class TestRename(unittest.TestCase):
     def test_ambiguous_bare_links_left_alone(self):
         self.v.write("Courses/PHYS101 — Mechanics/Cheat Sheets/Cheat Sheet - Exam 1.md", "---\ntype: cheat-sheet\n---\n")
         old = f"{COURSE}/Cheat Sheets/Cheat Sheet - Exam 1.md"
-        _, edits, skipped, _ = rename_note.plan(self.v.root, self.v.cfg, old, "Cheat Sheet - MATH101 Exam 1")
+        _, edits, skipped, *_ = rename_note.plan(self.v.root, self.v.cfg, old, "Cheat Sheet - MATH101 Exam 1")
         self.assertEqual(edits, {})
         self.assertTrue(skipped)
+
+    def test_same_course_resolves_ambiguous_bare_links_at_home_only(self):
+        self.v.write("Courses/PHYS101 — Mechanics/Cheat Sheets/Cheat Sheet - Exam 1.md", "---\ntype: cheat-sheet\n---\n")
+        self.v.write("Courses/PHYS101 — Mechanics/Forces.md", "[[Cheat Sheet - Exam 1]]\n")
+        self.v.write("Synthesis/Both.md", "[[Cheat Sheet - Exam 1]]\n")
+        old = f"{COURSE}/Cheat Sheets/Cheat Sheet - Exam 1.md"
+        _, edits, skipped, *_ = rename_note.plan(self.v.root, self.v.cfg, old, "Cheat Sheet - MATH101 Exam 1", same_course=True)
+        self.assertEqual(sorted(edits), [f"{COURSE}/Chain Rule.md", old])
+        self.assertEqual(len(skipped), 2)  # PHYS101's own note and the Synthesis note stay as they are
+
+    def test_slashed_new_without_md(self):
+        old = f"{COURSE}/Cheat Sheets/Cheat Sheet - Exam 1.md"
+        code, out = quiet(rename_note.main, ["rename_note.py", old, f"{COURSE}/Cheat Sheets/Sheet One", "--apply", "--vault", str(self.v.root)])
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.v.root / COURSE / "Cheat Sheets" / "Sheet One.md").exists())
+        self.assertIn("[[Sheet One|sheet]]", self.v.read(f"{COURSE}/Chain Rule.md"))
+
+    def test_alias_links_and_line_endings_kept(self):
+        old = f"{COURSE}/Cheat Sheets/Cheat Sheet - Exam 1.md"
+        self.v.write(old, "---\naliases:\n  - Sheet\ntype: cheat-sheet\n---\n")
+        (self.v.root / "Synthesis").mkdir(exist_ok=True)
+        (self.v.root / "Synthesis/W.md").write_bytes(b"[[Sheet]] and [[Cheat Sheet - Exam 1]]\r\nend\r\n")
+        quiet(rename_note.main, ["rename_note.py", old, "Cheat Sheet - MATH101 Exam 1", "--apply", "--vault", str(self.v.root)])
+        self.assertEqual((self.v.root / "Synthesis/W.md").read_bytes(),
+                         b"[[Sheet]] and [[Cheat Sheet - MATH101 Exam 1]]\r\nend\r\n")
 
 
 if __name__ == "__main__":

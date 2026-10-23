@@ -7,23 +7,23 @@ A course opts in through its `_Overview.md` frontmatter:
   deck-pattern: 'Lecture (?P<n>\\d+) (?P<title>.+)\\.pdf'  regex for its slide decks (case-insensitive)
   deck-offset: 0                                        vault lecture number = deck number + offset
   extra-patterns: ['HW\\d+.*\\.pdf', '.*\\.m']            other files to move as they are (no rendering)
+Only files whose extension is in `[intake] extensions` (gaku.toml, default pdf) are looked at,
+so add e.g. "m" there for MATLAB files.
 
 Usage:
   python3 scripts/intake.py                    plan only (default)
   python3 scripts/intake.py --apply            move the matched files
-  python3 scripts/intake.py --apply --render   also render decks to raw_images/<CODE>-L<N>-slide-NN.png
+  python3 scripts/intake.py --apply --render   also render decks to raw_images/<CODE>-L<N>-slide-<page>.png
   options: --from DIR · --course CODE · --json · --vault DIR
-Never deletes anything. A download byte-identical to a filed file is reported and left in place.
+Never deletes or overwrites anything: a download byte-identical to a filed file (or to another
+download in the same batch) is reported and left in place, an existing destination is a
+conflict, and slides already rendered for a lecture are not rendered again.
 """
-import hashlib, json, re, shutil, subprocess, sys
+import glob, hashlib, json, re, shutil, subprocess, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gakulib as g
-
-
-def arg(argv, flag, default=None):
-    return argv[argv.index(flag) + 1] if flag in argv else default
 
 
 def sha256(path):
@@ -45,13 +45,16 @@ def courses(root, only=None):
         if only and code.casefold() != only.casefold():
             continue
         extra = fm.get("extra-patterns") or []
-        out.append({
-            "code": code, "folder": folder,
-            "source_dir": Path(fm["source-dir"]).expanduser(),
-            "deck": re.compile(fm["deck-pattern"], re.I) if fm.get("deck-pattern") else None,
-            "extra": [re.compile(p, re.I) for p in (extra if isinstance(extra, list) else [extra])],
-            "offset": int(fm.get("deck-offset") or 0),
-        })
+        try:
+            out.append({
+                "code": code, "folder": folder,
+                "source_dir": Path(fm["source-dir"]).expanduser(),
+                "deck": re.compile(fm["deck-pattern"], re.I) if fm.get("deck-pattern") else None,
+                "extra": [re.compile(p, re.I) for p in (extra if isinstance(extra, list) else [extra])],
+                "offset": int(fm.get("deck-offset") or 0),
+            })
+        except (re.error, ValueError) as e:
+            raise SystemExit(f"{ov.relative_to(root)}: bad deck-pattern / extra-patterns / deck-offset — {e}")
     return out
 
 
@@ -67,17 +70,17 @@ def filed_hashes(course_list, sizes):
 
 
 def plan(root, cfg, argv):
-    src = Path(arg(argv, "--from", cfg["intake"]["from"])).expanduser()
+    src = Path(g.arg_value(argv, "--from", cfg["intake"]["from"])).expanduser()
     exts = {"." + e.lstrip(".").lower() for e in cfg["intake"]["extensions"]}
-    clist = courses(root, arg(argv, "--course"))
+    clist = courses(root, g.arg_value(argv, "--course"))
     downloads = sorted(p for p in src.iterdir() if p.is_file() and p.suffix.lower() in exts) if src.is_dir() else []
     filed = filed_hashes(clist, {p.stat().st_size for p in downloads})
-    rows = []
+    rows, batch = [], {}
     for f in downloads:
         row = {"file": str(f), "action": "unmatched"}
         h = sha256(f)
-        if h in filed:
-            row.update(action="duplicate", target=str(filed[h]))
+        if h in filed or h in batch:
+            row.update(action="duplicate", target=str(filed.get(h) or batch[h]))
             rows.append(row)
             continue
         hits = []
@@ -93,6 +96,8 @@ def plan(root, cfg, argv):
             c, m, deck = hits[0]
             dest = c["source_dir"] / f.name
             row.update(action="conflict" if dest.exists() else "move", course=c["code"], target=str(dest), deck=deck)
+            if not dest.exists():
+                batch[h] = dest
             if m and "n" in m.groupdict() and m.group("n"):
                 n = int(m.group("n")) + c["offset"]
                 title = re.sub(r"[_\s]+", " ", m.groupdict().get("title") or "").strip()
@@ -108,11 +113,19 @@ def render(root, cfg, row):
     images.mkdir(exist_ok=True)
     tag = f"L{row['lecture']}" if "lecture" in row else re.sub(r"\W+", "-", Path(row["file"]).stem).strip("-")
     prefix = images / f"{row['course']}-{tag}-slide"
-    subprocess.run(["pdftoppm", "-r", str(cfg["intake"]["dpi"]), "-png", row["target"], str(prefix)], check=True)
-    return f"rendered {len(list(images.glob(prefix.name + '-*.png')))} slide(s) → {prefix.name}-NN.png"
+    pattern = glob.escape(prefix.name) + "-*.png"
+    if any(images.glob(pattern)):
+        return f"{prefix.name}-*.png already exist — not re-rendered (move them aside to re-render)"
+    try:
+        subprocess.run(["pdftoppm", "-r", str(cfg["intake"]["dpi"]), "-png", row["target"], str(prefix)],
+                       check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        why = (e.stderr or "").strip().splitlines()
+        return f"render failed ({why[-1] if why else f'exit {e.returncode}'}) — the file was filed; check it opens"
+    return f"rendered {len(list(images.glob(pattern)))} slide(s) → {prefix.name}-<page>.png"
 
 
-LABEL = {"move": "MOVE", "duplicate": "DUP ", "unmatched": "??  ", "ambiguous": "AMBG", "conflict": "CONF"}
+LABEL = {"move": "MOVE", "duplicate": "DUP ", "unmatched": "??  ", "ambiguous": "AMBG", "conflict": "CONF", "error": "ERR "}
 
 
 def main(argv):
@@ -122,8 +135,15 @@ def main(argv):
     apply, do_render = "--apply" in argv, "--render" in argv
     for row in rows:
         if apply and row["action"] == "move":
-            Path(row["target"]).parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(row["file"], row["target"])
+            if Path(row["target"]).exists():
+                row["action"] = "conflict"
+                continue
+            try:
+                Path(row["target"]).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(row["file"], row["target"])
+            except OSError as e:
+                row.update(action="error", error=str(e))
+                continue
             row["done"] = True
             if do_render and row.get("deck"):
                 row["render"] = render(root, cfg, row)
@@ -138,12 +158,13 @@ def main(argv):
             "unmatched": "no course pattern matches — route by hand",
             "ambiguous": f"matches {', '.join(r.get('courses', []))} — tighten a pattern",
             "conflict": f"→ {r.get('target')} exists with different content — not moved",
+            "error": f"→ {r.get('target')} failed: {r.get('error')}",
         }[r["action"]]
         print(f"{LABEL[r['action']]} {name} {extra}" + (f"\n     {r['render']}" if r.get("render") else ""))
     moves = sum(r["action"] == "move" for r in rows)
     print(f"{len(rows)} file(s) in {src}: {moves} to move, "
           f"{sum(r['action'] == 'duplicate' for r in rows)} re-download(s), "
-          f"{sum(r['action'] in ('unmatched', 'ambiguous', 'conflict') for r in rows)} need you")
+          f"{sum(r['action'] in ('unmatched', 'ambiguous', 'conflict', 'error') for r in rows)} need you")
     if moves and not apply:
         print("plan only — add --apply to move (and --render for slide images)")
     return 0

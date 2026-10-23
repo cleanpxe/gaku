@@ -46,6 +46,16 @@ in tested scripts rather than one-off code. Plan for the rest of 2.0:
 
 **Fixed**
 
+- Review fixes before first use: `rename_note.py` accepts a NEW path without `.md`,
+  keeps alias links and line endings, and gains `--same-course`; `heal.py` keeps CRLF
+  notes' bytes, keeps the Dataview queries of a block it adds to, rejects multi-line or
+  bracketed glosses, re-plans in memory before writing, and drops `*(none yet)*`
+  placeholders; `intake.py` never re-renders over existing slides, survives a broken PDF
+  mid-batch, and files byte-identical downloads in one batch once; non-UTF-8 notes are a
+  lint error instead of a crash; unclosed fences, BOMs, CRLF frontmatter, quoted commas in
+  inline lists, `[[Note.md]]` and links to any existing file type resolve correctly;
+  `[lint] scope` limits what is reported.
+
 - The heal directive's Appendix B described one author's personal vault; it is now
   generic conformance notes, and Appendix A no longer points at a wrong path.
 - The demo course's links were ambiguous with the raw inputs in `docs/examples/`

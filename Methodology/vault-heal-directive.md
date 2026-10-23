@@ -66,8 +66,10 @@ Use the vault's existing managed-block convention if one exists. Otherwise:
 
 - Obsidian renders `%% … %%` as a hidden comment, so this stays invisible in
   reading view and never clutters the human-authored note.
-- **On re-run:** locate the block by its delimiters and **replace its entire
-  contents**. If absent, create one — placed at the end of the note body, below
+- **On re-run:** locate the block by its delimiters and update it in place.
+  `scripts/heal.py` rewrites only the block's *Semantic threads* list (dropping a
+  `*(none yet …)*` placeholder) and leaves the rest of the block as it is, so a
+  vault's older block layouts survive. If absent, create one — placed at the end of the note body, below
   human content. Exactly **one** heal block per note, and it is the **last thing**
   in the note.
 - **Markers count only at the start of a line.** Directives and docs quote the

@@ -7,11 +7,12 @@ Usage: python3 scripts/check_vault.py [--strict] [--json] [--vault DIR]
   --json     machine-readable findings
 Exit 1 on any error (or any warning under --strict). Read-only.
 
-Errors:   dead-link · missing-embed · ambiguous-link · heal-block · template-syntax · personal-data
+Errors:   dead-link · missing-embed · ambiguous-link · heal-block · template-syntax · personal-data · encoding
 Warnings: duplicate-name · missing-frontmatter · orphan · placeholder
 
-Suppress a known false positive by adding a substring of its output line to
-`[lint] allow` in gaku.toml.
+`[lint] scope` in gaku.toml limits which files are reported on (links still resolve
+across the whole vault). Suppress a known false positive by adding a substring of its
+output line to `[lint] allow`.
 """
 import json, re, sys
 from pathlib import Path
@@ -25,7 +26,7 @@ PERSONAL = [
     (re.compile(r"/(?:home|Users)/[A-Za-z0-9_.-]+/"), "absolute home path"),
 ]
 ALLOW_PERSONAL = {"LICENSE", "THIRD-PARTY-NOTICES.md"}
-ERRORS = {"dead-link", "missing-embed", "ambiguous-link", "heal-block", "template-syntax", "personal-data"}
+ERRORS = {"dead-link", "missing-embed", "ambiguous-link", "heal-block", "template-syntax", "personal-data", "encoding"}
 
 
 def lint(root, cfg, strict=False):
@@ -40,6 +41,9 @@ def lint(root, cfg, strict=False):
                          "severity": "error" if cat in ERRORS else "warning", "message": msg})
 
     for rel, fm in idx.notes.items():
+        if rel in idx.unreadable:
+            add(rel, 1, "encoding", "not valid UTF-8 — Obsidian and the scripts can't read it reliably")
+            continue
         text = g.read(idx.root / rel)
         in_template = rel.startswith("Templates/")
         is_prose = rel.startswith(prose)
@@ -91,12 +95,15 @@ def lint(root, cfg, strict=False):
     for rel in idx.notes:
         if rel.startswith(scope) and not inbound.get(rel) and not outbound.get(rel):
             add(rel, 1, "orphan", "no links in or out")
+    only = tuple(cfg["lint"]["scope"])
+    in_scope = lambda rel: not only or rel.startswith(only)
     for name, rels in idx.duplicates().items():
-        add(rels[0], 1, "duplicate-name", f"'{name}' is shared by {len(rels)} notes: {', '.join(rels)}"
+        shown = next((r for r in rels if in_scope(r)), rels[0])
+        add(shown, 1, "duplicate-name", f"'{name}' is shared by {len(rels)} notes: {', '.join(rels)}"
             " — bare links to it are ambiguous")
 
     allow = cfg["lint"]["allow"]
-    kept = [f for f in findings if not any(a in fmt(f) for a in allow)]
+    kept = [f for f in findings if in_scope(f["file"]) and not any(a in fmt(f) for a in allow)]
     return len(idx.notes), sorted(kept, key=lambda f: (f["severity"] != "error", f["file"], f["line"]))
 
 

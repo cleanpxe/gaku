@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Rename or move a note and rewrite every wikilink that points to it.
 
-Usage: python3 scripts/rename_note.py OLD NEW [--apply] [--vault DIR]
+Usage: python3 scripts/rename_note.py OLD NEW [--apply] [--same-course] [--vault DIR]
   OLD  vault-relative path of the note, e.g. "Courses/MATH101 — Calculus I/Lectures/Lecture - 4 Chain Rule.md"
-  NEW  a bare name (same folder) or a vault-relative path ending in .md
-Uses `git mv` inside a git repo. Leaves Snapshots/ alone (they are frozen) and
-never rewrites a bare link that also matches another note — those are listed so
-you can path-qualify them. Dry run unless --apply.
+  NEW  a bare name (same folder) or a vault-relative path; `.md` is added if missing
+Uses `git mv` inside a git repo. Leaves Snapshots/ alone (they are frozen), keeps
+links that reach the note through one of its `aliases:` (the alias moves with it),
+and preserves each file's line endings.
+
+A bare link that also matches another note is ambiguous and is left alone and
+listed, unless --same-course: then a bare link from a note in the same
+`Courses/<course>/` folder as OLD (and no other match there) is taken to mean OLD.
+Dry run unless --apply.
 """
 import re, subprocess, sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gakulib as g
@@ -17,62 +22,84 @@ import gakulib as g
 FROZEN = ("Snapshots/",)
 
 
-def plan(root, cfg, old, new):
+def course_of(rel):
+    parts = rel.split("/")
+    return "/".join(parts[:2]) if parts[0] == "Courses" and len(parts) > 2 else None
+
+
+def plan(root, cfg, old, new, same_course=False):
     idx = g.Index(root, cfg)
     if old not in idx.notes:
         raise SystemExit(f"not a note (or inside a skip dir): {old}")
     if "/" not in new:
-        new = str(Path(old).parent / (new if new.endswith(".md") else new + ".md"))
+        new = (PurePosixPath(old).parent / new).as_posix()
+    if not new.lower().endswith(".md"):
+        new += ".md"
     if (Path(root) / new).exists():
         raise SystemExit(f"already exists: {new}")
-    new_stem = Path(new).stem
+    old_stem, new_stem = Path(old).stem, Path(new).stem
     clash = idx.resolve(new_stem) - {old}
-    edits, skipped = {}, []
+    home = course_of(old)
+    edits, skipped, aliased, unreadable = {}, [], 0, []
     for rel in idx.notes:
         if rel.startswith(FROZEN):
             continue
-        text = g.read(Path(root) / rel)
+        try:
+            text = g.read_raw(Path(root) / rel)
+        except UnicodeDecodeError:
+            unreadable.append(rel)
+            continue
         clean = g.strip_code(text)
         out, last, n = [], 0, 0
         for m in g.LINK.finditer(clean):
             raw = text[m.start(2):m.end(2)]
-            target = re.split(r"\\?\||#|\^", raw, maxsplit=1)[0].rstrip("\\").strip()
+            target = g.target_of(raw)
             hits = idx.resolve(target) if target else set()
             if old not in hits:
                 continue
-            if hits != {old}:
-                skipped.append(f"{rel}: [[{target}]] also matches another note — not rewritten")
+            bare = target[:-3] if target.lower().endswith(".md") else target
+            path_style = "/" in bare
+            if not path_style and bare.casefold() != old_stem.casefold():
+                aliased += 1  # reached through an alias, which still works after the rename
                 continue
-            path_style = "/" in target
-            repl = new[:-3] if path_style else new_stem
-            if clash and not path_style:
-                repl = new[:-3]  # the new name is taken elsewhere: qualify so the link stays exact
+            if hits != {old}:
+                mine = same_course and not path_style and home and course_of(rel) == home \
+                    and not any(course_of(h) == home for h in hits - {old})
+                if not mine:
+                    skipped.append(f"{rel}: [[{target}]] also matches another note — not rewritten")
+                    continue
+            repl = new[:-3] if (path_style or clash) else new_stem  # qualify if the new name is taken
             start = m.start(2) + raw.index(target)
             out.append(text[last:start] + repl)
             last = start + len(target)
             n += 1
         if n:
             edits[rel] = ("".join(out) + text[last:], n)
-    return new, edits, skipped, clash
+    return new, edits, skipped, clash, aliased, unreadable
 
 
 def main(argv):
     args = [a for a in argv[1:] if not a.startswith("--")]
-    if "--vault" in argv:
-        args.remove(argv[argv.index("--vault") + 1])
+    vault = g.arg_value(argv, "--vault")
+    if vault:
+        args.remove(vault)
     if len(args) != 2:
         print(__doc__)
         return 2
     root = g.vault_root(argv)
     cfg = g.load_config(root)
     old, new = args
-    new, edits, skipped, clash = plan(root, cfg, old, new)
+    new, edits, skipped, clash, aliased, unreadable = plan(root, cfg, old, new, "--same-course" in argv)
     for rel, (_, n) in sorted(edits.items()):
         print(f"~ {rel} ({n} link{'s' * (n != 1)})")
     for s in skipped:
         print("! " + s)
+    for rel in unreadable:
+        print(f"! {rel}: not valid UTF-8 — not checked for links")
     if clash:
         print(f"! the name '{Path(new).stem}' is also used by {', '.join(sorted(clash))} — rewritten links are path-qualified")
+    if aliased:
+        print(f"  {aliased} link(s) through an alias left as they are")
     print(f"{old} → {new}: {sum(n for _, n in edits.values())} link(s) in {len(edits)} note(s)")
     if "--apply" not in argv:
         print("dry run — add --apply to rename")
@@ -84,8 +111,7 @@ def main(argv):
     else:
         (rootp / old).rename(rootp / new)
     for rel, (text, _) in edits.items():
-        rel = new if rel == old else rel
-        (rootp / rel).write_text(text, encoding="utf-8")
+        g.write_raw(rootp / (new if rel == old else rel), text)
     print("renamed")
     return 0
 

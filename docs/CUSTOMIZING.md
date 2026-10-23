@@ -37,6 +37,10 @@ extra-patterns: ['MATH101 Homework \d+.*\.pdf']
   `Lecture 6 - EDA.pdf`. When two courses' patterns match one file, intake reports it as
   ambiguous and moves nothing.
 - `extra-patterns` files (homework PDFs, MATLAB files…) are moved as they are, not rendered.
+  Intake only looks at extensions listed in `[intake] extensions`, so add `"m"` there for
+  MATLAB files.
+- Intake never overwrites: an existing destination is reported as a conflict, and slides
+  already rendered for a lecture number are not rendered again (move them aside first).
 
 ## Rename or add folders
 
