@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 — unreleased
+## 2.0.0 — 2026-10-25
 
 The template catches up with how a gaku vault is actually used: decks arrive before
 class, students type plain phrases instead of commands, and the mechanical steps belong

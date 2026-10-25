@@ -1,7 +1,7 @@
 # gaku 2.0 roadmap
 
 2.0 is the template catching up with how a gaku vault gets used once a semester is
-under way. The first slice is on the `gaku-2.0` branch (see `CHANGELOG.md`); the rest is
+under way. The first slice shipped as 2.0.0 (see `CHANGELOG.md`); the rest is
 below, roughly in order of value.
 
 ## Done in the first slice
