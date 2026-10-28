@@ -2,7 +2,8 @@
 """File downloaded course material: match each download to a course, skip re-downloads,
 move it into the course's source folder, and optionally render deck slides.
 
-A course opts in through its `_Overview.md` frontmatter:
+A course is a `Courses/<course>/_Overview.md`, or one folder down (`Courses/<group>/<course>/`,
+e.g. a next term staged as `Courses/SP27/`). It opts in through the overview's frontmatter:
   source-dir: "~/School/MATH101"                        where its files live (outside the vault is fine)
   deck-pattern: 'Lecture (?P<n>\\d+) (?P<title>.+)\\.pdf'  regex for its slide decks (case-insensitive)
   deck-offset: 0                                        vault lecture number = deck number + offset
@@ -36,7 +37,8 @@ def sha256(path):
 
 def courses(root, only=None):
     out = []
-    for ov in sorted(Path(root, "Courses").glob("*/_Overview.md")):
+    base = Path(root, "Courses")
+    for ov in sorted([*base.glob("*/_Overview.md"), *base.glob("*/*/_Overview.md")]):
         fm = g.frontmatter(g.read(ov))
         folder = ov.parent.name
         code = fm.get("code") or folder.split(" — ")[0].split()[0]

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**Changed**
+
+- `scripts/intake.py` also finds course overviews one folder down,
+  `Courses/<group>/<course>/_Overview.md`, so a next term staged as `Courses/SP27/` gets
+  its downloads filed too.
+
 ## 2.0.0 — 2026-10-25
 
 The template catches up with how a gaku vault is actually used: decks arrive before

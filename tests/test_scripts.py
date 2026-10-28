@@ -324,6 +324,18 @@ class TestIntake(unittest.TestCase):
         acts = sorted(r["action"] for r in rows if "Series" in r["file"])
         self.assertEqual(acts, ["duplicate", "move"])
 
+    def test_course_one_folder_down(self):
+        nested = Path(self.src.name, "PHYS101")
+        self.v.write("Courses/SP27/PHYS101 — Mechanics/_Overview.md", (
+            "---\ntype: course\nstatus: planned\n"
+            f'source-dir: "{nested}"\n'
+            "deck-pattern: 'PHYS101 Lec(?P<n>\\d+)\\.pdf'\n---\n"))
+        Path(self.dl.name, "PHYS101 Lec2.pdf").write_bytes(b"phys-two")
+        _, rows = intake.plan(self.v.root, self.v.cfg, ["intake.py", "--from", self.dl.name])
+        row = next(r for r in rows if r["file"].endswith("PHYS101 Lec2.pdf"))
+        self.assertEqual((row["action"], row["course"], row["target"]),
+                         ("move", "PHYS101", str(nested / "PHYS101 Lec2.pdf")))
+
 
 @unittest.skipUnless(shutil.which("pdftoppm"), "needs poppler's pdftoppm")
 class TestIntakeRender(unittest.TestCase):
